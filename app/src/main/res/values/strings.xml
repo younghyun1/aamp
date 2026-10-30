@@ -6,11 +6,27 @@
     <string name="browse_albums">Albums</string>
     <string name="browse_artists">Artists</string>
     <string name="browse_songs">Songs</string>
+    <string name="browse_recent">Recently added</string>
     <string name="browse_shuffle_all">Shuffle all</string>
     <plurals name="browse_album_count">
         <item quantity="one">%1$d album</item>
         <item quantity="other">%1$d albums</item>
     </plurals>
+    <plurals name="browse_artist_count">
+        <item quantity="one">%1$d artist</item>
+        <item quantity="other">%1$d artists</item>
+    </plurals>
+    <plurals name="browse_song_count">
+        <item quantity="one">%1$d song</item>
+        <item quantity="other">%1$d songs</item>
+    </plurals>
+
+    <!-- Playback buttons in Android Auto; each names the current mode -->
+    <string name="control_shuffle_on">Shuffle on</string>
+    <string name="control_shuffle_off">Shuffle off</string>
+    <string name="control_repeat_off">Repeat off</string>
+    <string name="control_repeat_all">Repeat all</string>
+    <string name="control_repeat_one">Repeat one</string>
     <string name="search_group_albums">Albums</string>
     <string name="search_group_artists">Artists</string>
     <string name="search_group_songs">Songs</string>
@@ -23,6 +39,8 @@
     <!-- Phone screen -->
     <string name="ui_permission_granted">Music access granted.</string>
     <string name="ui_permission_missing">aamp needs access to the music files on this phone.</string>
+    <string name="ui_covers_granted">Photo access granted: album covers from cover.jpg files show up.</string>
+    <string name="ui_covers_missing">Allow photo access (choose \"Allow all\") to show album covers stored as cover.jpg next to the music. Only cover images in music folders are read.</string>
     <string name="ui_grant_access">Allow access</string>
     <string name="ui_rescan">Rescan library</string>
     <string name="ui_library_loading">Scanning library…</string>

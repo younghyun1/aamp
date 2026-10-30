@@ -53,6 +53,7 @@ internal class LibraryCallback(
     private val library: Library,
     private val voiceLog: VoiceLog,
     private val scope: CoroutineScope,
+    private val queueStore: QueueStore,
 ) : MediaLibrarySession.Callback {
     private val items = BrowseItems(context)
 
@@ -148,9 +149,38 @@ internal class LibraryCallback(
         controller: ControllerInfo,
         isForPlayback: Boolean,
     ): ListenableFuture<MediaItemsWithStartPosition> = scope.future(Dispatchers.Default) {
+        // Android Auto presses play on the last-used app when it connects. Resume the saved
+        // queue; shuffle the library only when nothing was saved.
         val loaded = loadedOrFail()
-        val queue = QueueResolver(loaded, Random.Default).shuffleAll()
-        MediaItemsWithStartPosition(items.queue(loaded.snapshot, queue), queue.startIndex, C.TIME_UNSET)
+        restoreQueue(loaded) ?: run {
+            val queue = QueueResolver(loaded, Random.Default).shuffleAll()
+            MediaItemsWithStartPosition(items.queue(loaded.snapshot, queue), queue.startIndex, C.TIME_UNSET)
+        }
+    }
+
+    /**
+     * The saved queue mapped onto the current library. Tracks that no longer exist are skipped;
+     * if the current one is gone, playback resumes at the next surviving track from its start.
+     */
+    private fun restoreQueue(loaded: LoadedLibrary): MediaItemsWithStartPosition? {
+        val saved = queueStore.read() ?: return null
+        val s = loaded.snapshot
+        val restored = ArrayList<MediaItem>(saved.mediaIds.size)
+        var index = -1
+        var positionMs = 0L
+        for ((i, raw) in saved.mediaIds.withIndex()) {
+            val id = MediaIds.parse(raw) as? MediaId.Track ?: continue
+            val t = s.trackIndex(id.trackId).takeIf { it >= 0 } ?: continue
+            if (i == saved.index) {
+                index = restored.size
+                positionMs = saved.positionMs
+            } else if (index < 0 && i > saved.index) {
+                index = restored.size
+            }
+            restored += items.track(s, t, id.context)
+        }
+        if (restored.isEmpty()) return null
+        return MediaItemsWithStartPosition(restored, index.coerceIn(0, restored.lastIndex), positionMs)
     }
 
     /**
@@ -250,7 +280,8 @@ internal class LibraryCallback(
             is MediaId.Album -> s.albumIndex(id.albumId).takeIf { it >= 0 }?.let { resolver.album(it) }
             is MediaId.Artist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { resolver.artist(it, shuffle = true) }
             MediaId.ShuffleAll -> resolver.shuffleAll()
-            MediaId.Root, MediaId.Albums, MediaId.Artists, MediaId.Songs -> null
+            MediaId.Root, MediaId.Albums, MediaId.Artists, MediaId.Recent, MediaId.Songs,
+            is MediaId.AlbumSection, is MediaId.ArtistSection, is MediaId.SongSection -> null
         }
     }
 

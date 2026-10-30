@@ -35,6 +35,12 @@ class LibrarySnapshot internal constructor(
     private val artistTrackList: IntArray,
     /** Track indices ordered by normalized title, for the Songs list. */
     val tracksByTitle: IntArray,
+    /** Album indices, most recently added first. */
+    val albumsByRecent: IntArray,
+    /** Alphabetical sections of albums, artists, and tracks in title order. */
+    val albumLetters: LetterIndex,
+    val artistLetters: LetterIndex,
+    val trackLetters: LetterIndex,
 ) {
     private val trackById = LongIntMap.indexOf(trackIds)
     private val albumById = LongIntMap.indexOf(albumIds)

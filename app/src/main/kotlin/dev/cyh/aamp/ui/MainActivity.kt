@@ -13,9 +13,11 @@ import android.widget.ScrollView
 import android.widget.TextView
 import dev.cyh.aamp.R
 import dev.cyh.aamp.aamp
+import dev.cyh.aamp.artwork.ArtworkCache
 import dev.cyh.aamp.library.LibraryState
 import dev.cyh.aamp.voice.VoiceLogEntry
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -61,16 +63,23 @@ class MainActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != REQUEST_AUDIO) return
         renderPermission()
-        aamp.library.rescan()
+        val app = aamp
+        app.library.rescan()
+        // Albums marked as coverless before photo access was granted may have folder covers now.
+        app.appScope.launch(Dispatchers.IO) { ArtworkCache.clear(app) }
     }
 
-    private fun hasPermission(): Boolean =
-        checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
+    private fun has(permission: String): Boolean = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
     private fun renderPermission() {
-        val granted = hasPermission()
-        permissionText.setText(if (granted) R.string.ui_permission_granted else R.string.ui_permission_missing)
-        grantButton.visibility = if (granted) View.GONE else View.VISIBLE
+        val music = has(Manifest.permission.READ_MEDIA_AUDIO)
+        val covers = has(Manifest.permission.READ_MEDIA_IMAGES)
+        permissionText.text = buildString {
+            append(getString(if (music) R.string.ui_permission_granted else R.string.ui_permission_missing))
+            append('\n')
+            append(getString(if (covers) R.string.ui_covers_granted else R.string.ui_covers_missing))
+        }
+        grantButton.visibility = if (music && covers) View.GONE else View.VISIBLE
     }
 
     private fun renderLibrary(state: LibraryState) {
@@ -105,12 +114,17 @@ class MainActivity : Activity() {
         permissionText = TextView(this)
         grantButton = Button(this).apply {
             setText(R.string.ui_grant_access)
-            setOnClickListener { requestPermissions(arrayOf(Manifest.permission.READ_MEDIA_AUDIO), REQUEST_AUDIO) }
+            setOnClickListener { requestPermissions(arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES), REQUEST_AUDIO) }
         }
         libraryText = TextView(this).apply { setPadding(0, pad, 0, 0) }
         val rescan = Button(this).apply {
             setText(R.string.ui_rescan)
-            setOnClickListener { aamp.library.rescan() }
+            setOnClickListener {
+                val app = aamp
+                app.library.rescan()
+                // A manual rescan also drops cached covers, so changed artwork shows up.
+                app.appScope.launch(Dispatchers.IO) { ArtworkCache.clear(app) }
+            }
         }
         val voiceTitle = TextView(this).apply {
             setText(R.string.ui_voice_title)

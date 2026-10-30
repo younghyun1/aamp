@@ -6,7 +6,7 @@ Since Gemini replaced Google Assistant, voice requests reach non-partner music a
 
 ## Status
 
-First milestone code complete: playback service, MediaStore library, Android Auto browse tree and search, voice request parsing and matching, and a voice log on the phone screen. Replayed voice requests play the right queues on an Android 17 emulator; not yet tested in a car.
+Working on an Android 17 phone through the Desktop Head Unit: Gemini requests reach aamp and play the right album, including garbled ones; Android Auto shows covers, A to Z sections, Recently added, and shuffle and repeat buttons; playback resumes where it stopped when Android Auto connects. Not yet tested in a car.
 
 Music inside a folder whose name starts with a dot (for example `...And Justice for All/`) is hidden from Android's media index and therefore from aamp; rename such folders.
 
@@ -17,7 +17,7 @@ Music inside a folder whose name starts with a dot (for example `...And Justice 
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Open aamp on the phone once and allow music access, enable Unknown sources in Android Auto's developer settings, then pick aamp in Android Auto and ask Gemini to play something.
+Open aamp on the phone once and allow music access, plus photo access ("Allow all") if your covers are cover.jpg files next to the music. Enable Unknown sources in Android Auto's developer settings, then pick aamp in Android Auto and ask Gemini to play something.
 
 ## Requirements
 

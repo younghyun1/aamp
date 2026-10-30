@@ -17,6 +17,7 @@ object LibraryBuilder {
         val titleKey: String,
         val artistName: String,
         val year: Int,
+        val addedSec: Long,
         val tracks: List<RawTrack>,
     )
 
@@ -94,6 +95,8 @@ object LibraryBuilder {
 
         val titles = trackTitleKeys.requireAll()
         val tracksByTitle = (0 until trackCount).sortedWith(compareBy<Int>({ titles[it] }, { it })).toIntArray()
+        // Newest first; albums added in the same scan keep title order.
+        val albumsByRecent = (0 until albumCount).sortedWith(compareBy<Int>({ -albums[it].addedSec }, { it })).toIntArray()
 
         val snapshot = LibrarySnapshot(
             trackIds = trackIds,
@@ -116,6 +119,10 @@ object LibraryBuilder {
             artistTrackOffsets = trackOffsets,
             artistTrackList = trackList,
             tracksByTitle = tracksByTitle,
+            albumsByRecent = albumsByRecent,
+            albumLetters = LetterIndex.build(IntArray(albumCount) { it }) { albums[it].titleKey },
+            artistLetters = LetterIndex.build(IntArray(artistCount) { it }) { artistOrder[it] },
+            trackLetters = LetterIndex.build(tracksByTitle) { titles[it] },
         )
         val search = SearchIndex(
             albums = KindIndex.build(Array(albumCount) { MatchKey.ofNormalized(albums[it].titleKey) }),
@@ -141,6 +148,7 @@ object LibraryBuilder {
                 titleKey = TextNormalizer.normalize(title),
                 artistName = albumArtistOf(tracks),
                 year = tracks.maxOf { it.year },
+                addedSec = tracks.maxOf { it.dateAddedSec },
                 tracks = tracks,
             )
         }

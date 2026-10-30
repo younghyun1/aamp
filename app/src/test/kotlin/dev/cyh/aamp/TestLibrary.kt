@@ -56,6 +56,8 @@ object TestLibrary {
                 year = album.year,
                 durationMs = 240_000,
                 isCompilation = album.compilation,
+                // Later fixtures count as added later, for Recently added.
+                dateAddedSec = album.id * 1_000L,
             )
         }
     }.reversed() // MediaStore order is arbitrary; the builder must not depend on it.

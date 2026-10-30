@@ -23,8 +23,9 @@ aamp is a local-music player for Android Auto. Its voice search turns Gemini req
 ```
 app/src/main/kotlin/dev/cyh/aamp/
   AampApplication.kt   process-wide Library and VoiceLog
-  playback/   PlaybackService, LibraryCallback, AudioPlayer
-  library/    MediaStore scan, LibrarySnapshot, LibraryBuilder, Library state
+  playback/   PlaybackService, LibraryCallback, AudioPlayer, QueueStore
+  library/    MediaStore scan, LibrarySnapshot, LibraryBuilder, LetterIndex, Library state
+  artwork/    ArtworkProvider, ArtworkCache (album covers for Android Auto)
   search/     TextNormalizer, MatchKey, Similarity, SearchIndex
   voice/      VoiceRequestParser, QueueResolver, VoiceLog, PlayFromSearchActivity
   browse/     media ids and the Android Auto browse items
@@ -33,7 +34,7 @@ app/src/test/kotlin/dev/cyh/aamp/   JVM unit tests; TestLibrary is the shared fi
 docs/plans/                         design notes, YYYY-MM-DD-name.md
 ```
 
-`artwork/` (ArtworkProvider) and snapshot persistence in `library/` are still to come.
+Snapshot persistence in `library/` is still to come.
 
 ## Toolchain
 
@@ -56,7 +57,7 @@ adb shell am start -a android.media.action.MEDIA_PLAY_FROM_SEARCH -n dev.cyh.aam
 
 The last command replays a voice request through the same session path Android Auto uses; add hints with `--es android.intent.extra.focus vnd.android.cursor.item/album --es android.intent.extra.album "Kill 'Em All"` and similar.
 
-Routine work uses debug builds and unit tests. Release builds, baseline profile generation and on-device benchmarks are run by the maintainer.
+Routine work uses debug builds and unit tests. Release builds, baseline profile generation and on-device benchmarks happen only when the maintainer asks. Release builds are signed with the local debug key so they install over debug builds; after installing one, `adb shell cmd package compile -m speed -f dev.cyh.aamp` compiles it fully ahead of time.
 
 ## Device testing
 

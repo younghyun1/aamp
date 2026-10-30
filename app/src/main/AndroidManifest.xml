@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Optional: album covers stored as cover.jpg next to the music are images. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- ExoPlayer holds a partial wake lock while playing local files (C.WAKE_MODE_LOCAL). -->
@@ -43,6 +45,16 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!--
+            Album art for Android Auto and System UI, read-only. Exported because System UI loads covers
+            from session metadata without connecting to the session, so URI grants cannot reach it.
+        -->
+        <provider
+            android:name=".artwork.ArtworkProvider"
+            android:authorities="dev.cyh.aamp.artwork"
+            android:exported="true"
+            tools:ignore="ExportedContentProvider" />
 
         <!-- Exported without a permission: Android Auto, Gemini and system media controls must bind to it. -->
         <service

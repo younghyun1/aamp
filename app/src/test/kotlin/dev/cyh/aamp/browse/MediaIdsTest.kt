@@ -9,7 +9,8 @@ class MediaIdsTest {
     @Test
     fun `ids round trip`() {
         val ids = listOf(
-            MediaId.Root, MediaId.Albums, MediaId.Artists, MediaId.Songs, MediaId.ShuffleAll,
+            MediaId.Root, MediaId.Albums, MediaId.Artists, MediaId.Recent, MediaId.Songs, MediaId.ShuffleAll,
+            MediaId.AlbumSection("A"), MediaId.AlbumSection("#"), MediaId.ArtistSection("ㅂ"), MediaId.SongSection("К"),
             MediaId.Album(7), MediaId.Artist(-3_750_763_034_362_895_579),
             MediaId.Track(42, TrackContext.None),
             MediaId.Track(42, TrackContext.InAlbum(7)),
@@ -25,6 +26,7 @@ class MediaIdsTest {
         assertNull(MediaIds.parse(""))
         assertNull(MediaIds.parse("album:x"))
         assertNull(MediaIds.parse("track:1@root"))
+        assertNull(MediaIds.parse("albums:"))
         assertNull(MediaIds.parse("something"))
     }
 
