@@ -24,3 +24,7 @@ Open aamp on the phone once and allow music access, plus photo access ("Allow al
 - Android 17 (API 37) phone with Android Auto.
 - Unknown sources enabled in Android Auto's developer settings, since aamp is sideloaded.
 - Music files indexed by Android's media library, readable with the audio permission.
+
+## License
+
+MIT; see [LICENSE](LICENSE).
