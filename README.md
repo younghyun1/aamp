@@ -6,7 +6,9 @@ Since Gemini replaced Google Assistant, voice requests reach non-partner music a
 
 ## Status
 
-First milestone code complete: playback service, MediaStore library, Android Auto browse tree and search, voice request parsing and matching, and a voice log on the phone screen. Not yet tested in a car.
+First milestone code complete: playback service, MediaStore library, Android Auto browse tree and search, voice request parsing and matching, and a voice log on the phone screen. Replayed voice requests play the right queues on an Android 17 emulator; not yet tested in a car.
+
+Music inside a folder whose name starts with a dot (for example `...And Justice for All/`) is hidden from Android's media index and therefore from aamp; rename such folders.
 
 ## Build and install
 

@@ -62,7 +62,8 @@ Routine work uses debug builds and unit tests. Release builds, baseline profile 
 
 - Android Auto hides sideloaded apps until Unknown sources is enabled: Android Auto settings, tap Version repeatedly to unlock developer settings, then enable Unknown sources.
 - The voice log on the phone screen, or `adb logcat -s AampVoice:V`, shows exactly what Gemini sent.
-- Background audio on Android 17 fails silently. Test playback started from Android Auto with audio hardening set to `throw`.
+- Background audio on Android 17 fails silently. Test playback started from Android Auto with audio hardening set to `throw`; the emulator's test-device image does not honour that override.
+- Without a phone, use the API 37 emulator (`system-images;android-37.0;aosp_atd;x86_64`, AVD `aamp-api37`): `emulator -avd aamp-api37 -no-window -no-boot-anim -no-snapshot -no-audio`, push tagged files to `/sdcard/Music/`, index them with `adb shell content call --uri content://media/ --method scan_volume --arg external_primary`, grant `READ_MEDIA_AUDIO` with `adb shell pm grant`, then replay requests with the `PlayFromSearchActivity` command. MediaStore ignores folders whose names start with a dot.
 
 ## Docs and commits
 
