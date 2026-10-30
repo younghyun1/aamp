@@ -6,7 +6,16 @@ Since Gemini replaced Google Assistant, voice requests reach non-partner music a
 
 ## Status
 
-Design only; the first milestone (playback service, library scan, Android Auto browse tree and voice log) is next.
+First milestone code complete: playback service, MediaStore library, Android Auto browse tree and search, voice request parsing and matching, and a voice log on the phone screen. Not yet tested in a car.
+
+## Build and install
+
+```
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Open aamp on the phone once and allow music access, enable Unknown sources in Android Auto's developer settings, then pick aamp in Android Auto and ask Gemini to play something.
 
 ## Requirements
 

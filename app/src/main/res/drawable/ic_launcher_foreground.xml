@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A record: outer disc with a label ring and spindle hole, inside the adaptive icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M30,54a24,24 0,1 1,48 0a24,24 0,1 1,-48 0z M44,54a10,10 0,1 0,20 0a10,10 0,1 0,-20 0z M51,54a3,3 0,1 1,6 0a3,3 0,1 1,-6 0z" />
+</vector>

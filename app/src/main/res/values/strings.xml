@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">aamp</string>
+
+    <!-- Android Auto browse tree -->
+    <string name="browse_albums">Albums</string>
+    <string name="browse_artists">Artists</string>
+    <string name="browse_songs">Songs</string>
+    <string name="browse_shuffle_all">Shuffle all</string>
+    <plurals name="browse_album_count">
+        <item quantity="one">%1$d album</item>
+        <item quantity="other">%1$d albums</item>
+    </plurals>
+    <string name="search_group_albums">Albums</string>
+    <string name="search_group_artists">Artists</string>
+    <string name="search_group_songs">Songs</string>
+
+    <!-- Errors shown in Android Auto -->
+    <string name="error_no_match">No match for \"%1$s\"</string>
+    <string name="error_library_unavailable">The music library is not ready</string>
+    <string name="error_permission_missing">aamp needs access to music; open it on your phone</string>
+
+    <!-- Phone screen -->
+    <string name="ui_permission_granted">Music access granted.</string>
+    <string name="ui_permission_missing">aamp needs access to the music files on this phone.</string>
+    <string name="ui_grant_access">Allow access</string>
+    <string name="ui_rescan">Rescan library</string>
+    <string name="ui_library_loading">Scanning library…</string>
+    <string name="ui_library_stats">Tracks: %1$d. Albums: %2$d. Artists: %3$d. Scan took %4$d ms.</string>
+    <string name="ui_library_failed">Library scan failed: %1$s</string>
+    <string name="ui_voice_title">Voice requests</string>
+    <string name="ui_voice_empty">No voice requests yet. Ask Gemini in Android Auto to play something with aamp open.</string>
+</resources>

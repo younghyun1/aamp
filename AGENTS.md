@@ -20,20 +20,20 @@ aamp is a local-music player for Android Auto. Its voice search turns Gemini req
 
 ## Layout
 
-The layout below is planned; the Gradle project lands with the first milestone.
-
 ```
 app/src/main/kotlin/dev/cyh/aamp/
-  playback/   PlaybackService, LibraryCallback, player configuration
-  library/    MediaStore scan, LibrarySnapshot, snapshot persistence
-  search/     normalization, SearchIndex, scoring
-  voice/      VoiceRequestParser, QueueResolver, VoiceLog
-  browse/     Android Auto browse tree and media ids
-  artwork/    ArtworkProvider
+  AampApplication.kt   process-wide Library and VoiceLog
+  playback/   PlaybackService, LibraryCallback, AudioPlayer
+  library/    MediaStore scan, LibrarySnapshot, LibraryBuilder, Library state
+  search/     TextNormalizer, MatchKey, Similarity, SearchIndex
+  voice/      VoiceRequestParser, QueueResolver, VoiceLog, PlayFromSearchActivity
+  browse/     media ids and the Android Auto browse items
   ui/         MainActivity
-app/src/test/kotlin/dev/cyh/aamp/   JVM unit tests
+app/src/test/kotlin/dev/cyh/aamp/   JVM unit tests; TestLibrary is the shared fixture
 docs/plans/                         design notes, YYYY-MM-DD-name.md
 ```
+
+`artwork/` (ArtworkProvider) and snapshot persistence in `library/` are still to come.
 
 ## Toolchain
 
@@ -51,7 +51,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb logcat -s Aamp:V AampVoice:V AampLibrary:V
 adb shell dumpsys media_session
 adb shell cmd audio set-enable-hardening throw
+adb shell am start -a android.media.action.MEDIA_PLAY_FROM_SEARCH -n dev.cyh.aamp/.voice.PlayFromSearchActivity --es query "album kill em all by metallica"
 ```
+
+The last command replays a voice request through the same session path Android Auto uses; add hints with `--es android.intent.extra.focus vnd.android.cursor.item/album --es android.intent.extra.album "Kill 'Em All"` and similar.
 
 Routine work uses debug builds and unit tests. Release builds, baseline profile generation and on-device benchmarks are run by the maintainer.
 
