@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local SDK paths and signing material
+local.properties
+*.jks
+*.keystore
+keystore.properties
+
+# IDE
+.idea/
+*.iml
+
+# Profiling and benchmark captures
+captures/
+*.perfetto-trace
+*.hprof
+
+# OS
+.DS_Store
