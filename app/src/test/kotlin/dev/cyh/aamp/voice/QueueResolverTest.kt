@@ -47,8 +47,29 @@ class QueueResolverTest {
     }
 
     @Test
-    fun `unmarked title track request starts at the song and keeps the album`() {
-        assertAlbumFrom(resolve(RequestKind.ANY, "and justice for all by metallica"), "...And Justice for All", "...And Justice for All")
+    fun `an album with a same-named title track plays as the album`() {
+        // Gemini drops "album" from "play album X", so these arrive unmarked.
+        assertAlbumFrom(resolve(RequestKind.ANY, "and justice for all by metallica"), "...And Justice for All", "Blackened")
+        assertAlbumFrom(resolve(RequestKind.ANY, "and justice for all"), "...And Justice for All", "Blackened")
+        assertAlbumFrom(resolve(RequestKind.ANY, "master of puppets"), "Master of Puppets (Remastered)", "Battery")
+        assertAlbumFrom(resolve(RequestKind.ANY, "the bends"), "The Bends", "Planet Telex")
+    }
+
+    @Test
+    fun `gemini's garbled request still finds the album`() {
+        // Recorded from Gemini in Android Auto for "play album And Justice For All by Metallica".
+        assertAlbumFrom(resolve(RequestKind.ANY, "and just for all my intelligents"), "...And Justice for All", "Blackened")
+    }
+
+    @Test
+    fun `a short exact title still plays the song`() {
+        assertAlbumFrom(resolve(RequestKind.ANY, "just by radiohead"), "The Bends", "Just")
+        assertAlbumFrom(resolve(RequestKind.ANY, "one"), "...And Justice for All", "One")
+    }
+
+    @Test
+    fun `my is read as by when it introduces an artist`() {
+        assertAlbumFrom(resolve(RequestKind.ANY, "kill em all my metallica"), "Kill 'Em All", "Hit the Lights")
     }
 
     @Test

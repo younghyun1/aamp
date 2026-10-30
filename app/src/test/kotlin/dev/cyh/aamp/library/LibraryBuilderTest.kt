@@ -15,8 +15,10 @@ class LibraryBuilderTest {
     fun `albums are ordered by normalized title`() {
         assertEquals(
             listOf(
-                "Ace of Spades", "...And Justice for All", "Don't Play That Song!", "Kill 'Em All",
-                "Master of Puppets (Remastered)", "Metallica", "Now That's What I Call Music", "Ride the Lightning",
+                // "The Bends" sorts as "bends": a leading "the" is ignored.
+                "Ace of Spades", "...And Justice for All", "The Bends", "Don't Play That Song!", "Kill 'Em All",
+                "Live in Seoul", "Master of Puppets (Remastered)", "Metallica", "Now That's What I Call Music",
+                "Ride the Lightning",
             ),
             snapshot.albumTitles.toList(),
         )
@@ -42,10 +44,13 @@ class LibraryBuilderTest {
         val metallica = library.artist("Metallica")
         val titles = snapshot.artistAlbums(metallica).map { snapshot.albumTitles[it] }
         assertEquals(
-            listOf("Kill 'Em All", "Ride the Lightning", "Master of Puppets (Remastered)", "...And Justice for All", "Metallica"),
+            listOf(
+                "Kill 'Em All", "Ride the Lightning", "Master of Puppets (Remastered)", "...And Justice for All",
+                "Metallica", "Live in Seoul",
+            ),
             titles,
         )
-        assertEquals(18, snapshot.artistTracks(metallica).size)
+        assertEquals(20, snapshot.artistTracks(metallica).size)
     }
 
     @Test

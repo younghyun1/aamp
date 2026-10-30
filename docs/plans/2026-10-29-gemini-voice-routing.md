@@ -25,17 +25,22 @@ Google Assistant reached third-party music apps in two ways: App Actions (`actio
 
 From there the app alone decides what plays. The route only works if the session advertises `ACTION_PLAY_FROM_SEARCH` in its current playback state, including when idle; otherwise Gemini answers that it cannot control media apps. Music Assistant hit exactly this and fixed it in its app in September 2026.
 
-## Observed: Poweramp
+## Observed: what Gemini actually sends
 
-With Gemini in Android Auto, the request reached Poweramp, which proves the Android Auto route works for a non-partner local player. Poweramp then played the matching song from its all-tracks list rather than the album. The title track of that album is also called "...And Justice for All", so a song-first search finds an exact match. One of two things is true, and the request log in aamp will show which:
+Measured on a Samsung SM-S948U running Android 17, through the Desktop Head Unit, on 2026-10-29.
 
-- Gemini sends only the raw text, without the album hint.
-- Gemini sends the album hint, and Poweramp ignores it.
+- **Caller and target.** The Google app (`com.google.android.googlequicksearchbox`) calls `playFromSearch` on the session of the currently active media app; the Android Auto host does not relay it. The system log shows `tempAllowlistTargetPkgIfPossible callingPackage:com.google.android.googlequicksearchbox targetPackage:<app> reason:MediaSessionRecord:playFromSearch [WIU]`.
+- **Which app.** The active media app, not one named in the request. Android Auto resumes the last-used media app when it connects, so that app receives requests until another one plays.
+- **While-in-use.** The `[WIU]` grant gives the target app while-in-use status for the request, so Android 17's background audio hardening does not block playback started by voice.
+- **Hints.** None useful. For "play album And Justice For All by Metallica" the extras were only `android.intent.extra.focus=vnd.android.cursor.item/*`, `android.intent.extra.REFERRER_NAME` and `android.intent.extra.user_query_language`. No album, artist or title extras.
+- **Query text.** Rewritten by Gemini: "play album" was removed, and recognition through the head unit's microphone produced "And Just For All My Intelligents".
+
+This explains Poweramp: it received the bare name without any album marker and searched songs first, finding the title track "...And Justice for All".
 
 ## Consequences for aamp
 
 - aamp must be the active media app in Android Auto for voice requests to reach it.
-- Matching quality is entirely aamp's job: honour the hints when present, and parse the raw text when they are not.
+- Matching is entirely aamp's job, from text alone: the word "album" never arrives, artist names may be misheard, and "by" may be heard as "my". An album that matches as well as its same-named title track has to win.
 - Gemini on the phone, outside the car, will not route to aamp; nothing in the app can change that.
 - The session must keep advertising play-from-search in every state. Media3 does this whenever the player allows `COMMAND_SET_MEDIA_ITEM` (checked in the Media3 1.11.1 source, `MediaSessionLegacyStub`).
 

@@ -33,6 +33,13 @@ object TestLibrary {
             listOf("Ace of Spades" to null, "Love Me Like a Reptile" to null)),
         AlbumSpec(8, "Now That's What I Call Music", "", "", 2001,
             listOf("Song A" to "Artist A", "Song B" to "Artist B"), compilation = true),
+        // A one-word title that a long, garbled query contains ("and just for all my intelligents").
+        AlbumSpec(9, "The Bends", "Radiohead", "Radiohead", 1995,
+            listOf("Planet Telex" to null, "The Bends" to null, "High and Dry" to null, "Fake Plastic Trees" to null,
+                "Bones" to null, "Nice Dream" to null, "Just" to null)),
+        // A second song with the same name as the studio album.
+        AlbumSpec(10, "Live in Seoul", "Metallica", "Metallica", 2017,
+            listOf("Creeping Death" to null, "And Justice For All" to null)),
     )
 
     fun rows(): List<RawTrack> = albums.flatMap { album ->

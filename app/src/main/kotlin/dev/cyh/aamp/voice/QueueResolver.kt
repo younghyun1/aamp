@@ -33,9 +33,9 @@ sealed interface Resolution {
  * - Album: the album from its first track.
  * - Song: the song, then the rest of its album.
  * - Artist: every track by the artist, shuffled.
- * - Any: whichever of artist, album and song matches best. An exact artist name wins ties, and
- *   when a song and the album it is the title track of match equally, the song plays first and
- *   the album continues after it.
+ * - Any: whichever of artist, album and song matches best. An artist wins ties, and an album wins
+ *   ties and near ties with a song: Gemini drops the word "album" from "play album X", so a
+ *   request that names both an album and its title track is taken as the album.
  */
 class QueueResolver(private val library: LoadedLibrary, private val random: Random) {
     private val snapshot = library.snapshot
@@ -106,12 +106,8 @@ class QueueResolver(private val library: LoadedLibrary, private val random: Rand
         val r = artist?.score ?: 0f
         return when {
             artist != null && r >= a && r >= t -> artist(artist.index, shuffle = true).scored(artist)
-            album != null && a >= t + MARGIN -> album(album.index).scored(album)
-            track != null && t >= a + MARGIN -> song(track.index, request.shuffle).scored(track)
-            album != null && track != null ->
-                // A tie between an album and its title track: start at the song, keep the album going.
-                if (snapshot.trackAlbum[track.index] == album.index) song(track.index, request.shuffle).scored(track)
-                else album(album.index).scored(album)
+            album != null && a >= t - MARGIN -> album(album.index).scored(album)
+            track != null -> song(track.index, request.shuffle).scored(track)
             else -> Resolution.NoMatch(request.phrase)
         }
     }
@@ -130,19 +126,23 @@ class QueueResolver(private val library: LoadedLibrary, private val random: Rand
     /**
      * The ways to read a request. With an artist hint there is one. Otherwise the whole phrase is
      * a title, and "X by Y" is also read as title X by artist Y when Y names a library artist,
-     * so "Stand by Me" stays a title.
+     * so "Stand by Me" stays a title. Speech recognition often hears "by" as "my", so "X my Y"
+     * gets the same treatment.
      */
     private fun readings(request: PlayRequest.Search): List<Reading> {
         request.artist?.let { return listOf(Reading(MatchKey.of(request.phrase), MatchKey.of(it))) }
-        val whole = Reading(MatchKey.of(request.phrase), null)
-        val split = request.phrase.lastIndexOf(" by ")
-        if (split <= 0) return listOf(whole)
-        val title = request.phrase.substring(0, split)
-        val artistText = request.phrase.substring(split + 4)
-        if (title.isBlank() || artistText.isBlank()) return listOf(whole)
-        val artistKey = MatchKey.of(artistText)
-        if (search.artists.best(artistKey, ARTIST_SPLIT_MIN) == null) return listOf(whole)
-        return listOf(Reading(MatchKey.of(title), artistKey), whole)
+        val readings = ArrayList<Reading>(3)
+        for (separator in ARTIST_SEPARATORS) {
+            val split = request.phrase.lastIndexOf(separator)
+            if (split <= 0) continue
+            val title = request.phrase.substring(0, split)
+            val artistText = request.phrase.substring(split + separator.length)
+            if (title.isBlank() || artistText.isBlank()) continue
+            val artistKey = MatchKey.of(artistText)
+            if (search.artists.best(artistKey, ARTIST_SPLIT_MIN) != null) readings += Reading(MatchKey.of(title), artistKey)
+        }
+        readings += Reading(MatchKey.of(request.phrase), null)
+        return readings
     }
 
     private fun bestAlbum(readings: List<Reading>): Hit? = readings.mapNotNull { reading ->
@@ -188,8 +188,10 @@ class QueueResolver(private val library: LoadedLibrary, private val random: Rand
         /** Weakest combined score that still counts as a match. */
         const val MIN_SCORE = 0.6f
 
-        /** How much better an album or song must score to beat the other outright. */
+        /** How much better a song must score than an album to be chosen over it. */
         const val MARGIN = 0.05f
+
+        private val ARTIST_SEPARATORS = listOf(" by ", " my ")
 
         /**
          * How well the text after the last "by" must match an artist to be read as one. Low enough
