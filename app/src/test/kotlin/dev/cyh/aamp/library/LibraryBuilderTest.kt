@@ -15,13 +15,16 @@ class LibraryBuilderTest {
     fun `albums are ordered by normalized title`() {
         assertEquals(
             listOf(
-                // "The Bends" sorts as "bends": a leading "the" is ignored.
-                "Ace of Spades", "...And Justice for All", "The Bends", "Don't Play That Song!", "Kill 'Em All",
+                // "The Bends" sorts as "bends": a leading "the" is ignored. Equal titles sort by artist.
+                "Ace of Spades", "...And Justice for All", "The Bends", "Don't Play That Song!",
+                "Greatest Hits", "Greatest Hits", "Kill 'Em All",
                 "Live in Seoul", "Master of Puppets (Remastered)", "Metallica", "Now That's What I Call Music",
                 "Ride the Lightning",
             ),
             snapshot.albumTitles.toList(),
         )
+        assertEquals(listOf("ABBA", "Queen"), snapshot.albumTitles.indices.filter { snapshot.albumTitles[it] == "Greatest Hits" }
+            .map { snapshot.artistNames[snapshot.albumArtist[it]] })
     }
 
     @Test

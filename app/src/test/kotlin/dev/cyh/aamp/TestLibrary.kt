@@ -40,6 +40,12 @@ object TestLibrary {
         // A second song with the same name as the studio album.
         AlbumSpec(10, "Live in Seoul", "Metallica", "Metallica", 2017,
             listOf("Creeping Death" to null, "And Justice For All" to null)),
+        // Two albums with one title, told apart only by the artist; and an artist name ("Queen")
+        // that ends another artist's song title ("Dancing Queen").
+        AlbumSpec(11, "Greatest Hits", "Queen", "Queen", 1981,
+            listOf("Bohemian Rhapsody" to null, "Another One Bites the Dust" to null)),
+        AlbumSpec(12, "Greatest Hits", "ABBA", "ABBA", 1975,
+            listOf("Dancing Queen" to null, "Waterloo" to null)),
     )
 
     fun rows(): List<RawTrack> = albums.flatMap { album ->
@@ -65,6 +71,10 @@ object TestLibrary {
     fun build(): LoadedLibrary = LibraryBuilder.build(rows())
 
     fun LoadedLibrary.album(title: String): Int = snapshot.albumTitles.indexOf(title).also { check(it >= 0) { title } }
+
+    /** The album titled [title] by [artist], for titles several artists share. */
+    fun LoadedLibrary.album(title: String, artist: String): Int =
+        snapshot.albumTitles.indices.first { snapshot.albumTitles[it] == title && snapshot.artistNames[snapshot.albumArtist[it]] == artist }
 
     fun LoadedLibrary.track(title: String): Int = snapshot.trackTitles.indexOf(title).also { check(it >= 0) { title } }
 

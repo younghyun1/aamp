@@ -138,11 +138,90 @@ class QueueResolverTest {
         assertEquals(Resolution.EmptyLibrary, empty.resolve(PlayRequest.ShuffleAll))
     }
 
+    private fun assertAlbum(resolution: Resolution, album: Int) {
+        val q = queue(resolution)
+        assertEquals(QueueSource.Album(album), q.source)
+        assertEquals(0, q.startIndex)
+    }
+
+    @Test
+    fun `artist phrasings other than by`() {
+        val killEmAll = "Kill 'Em All"
+        for (phrase in listOf(
+            "kill em all from metallica",
+            "kill em all bye metallica",
+            "kill em all buy metallica",
+            "kill em all by the band metallica",
+            "kill em all by the artist metallica",
+        )) {
+            assertAlbumFrom(resolve(RequestKind.ANY, phrase), killEmAll, "Hit the Lights")
+        }
+    }
+
+    @Test
+    fun `an artist without a separator is split off when it matches closely`() {
+        assertAlbumFrom(resolve(RequestKind.ANY, "ride the lightning metallica"), "Ride the Lightning", "Fight Fire with Fire")
+        assertAlbumFrom(resolve(RequestKind.ANY, "metallica ride the lightning"), "Ride the Lightning", "Fight Fire with Fire")
+        assertAlbumFrom(resolve(RequestKind.ANY, "enter sandman metallica"), "Metallica", "Enter Sandman")
+        assertAlbumFrom(resolve(RequestKind.ANY, "metallica one"), "...And Justice for All", "One")
+    }
+
+    @Test
+    fun `a possessive artist comes first`() {
+        assertAlbumFrom(resolve(RequestKind.ANY, "metallicas master of puppets"), "Master of Puppets (Remastered)", "Battery")
+        assertAlbum(resolve(RequestKind.ANY, "queens greatest hits"), library.album("Greatest Hits", "Queen"))
+    }
+
+    @Test
+    fun `the artist decides between albums with the same title`() {
+        val queen = library.album("Greatest Hits", "Queen")
+        val abba = library.album("Greatest Hits", "ABBA")
+        assertAlbum(resolve(RequestKind.ANY, "greatest hits by abba"), abba)
+        assertAlbum(resolve(RequestKind.ANY, "greatest hits by queen"), queen)
+        assertAlbum(resolve(RequestKind.ANY, "greatest hits abba"), abba)
+        assertAlbum(resolve(RequestKind.ANY, "abba greatest hits"), abba)
+        assertAlbum(resolve(RequestKind.ALBUM, "greatest hits", artist = "Queen"), queen)
+    }
+
+    @Test
+    fun `an artist name ending a title is not split off`() {
+        assertAlbumFrom(resolve(RequestKind.ANY, "dancing queen"), "Greatest Hits", "Dancing Queen")
+        assertEquals("ABBA", snapshot.artistNames[snapshot.trackArtist[queue(resolve(RequestKind.ANY, "dancing queen")).let { it.tracks[it.startIndex] }]])
+        // A three-word artist name is the artist, not "ben e" by "king".
+        assertEquals(QueueSource.Artist(library.artist("Ben E. King")), queue(resolve(RequestKind.ANY, "ben e king")).source)
+    }
+
+    @Test
+    fun `by inside a title and after it`() {
+        assertAlbumFrom(resolve(RequestKind.ANY, "stand by me by ben e king"), "Don't Play That Song!", "Stand by Me")
+    }
+
+    @Test
+    fun `a song from a named album`() {
+        assertAlbumFrom(resolve(RequestKind.ANY, "one from the album and justice for all"), "...And Justice for All", "One")
+        assertAlbumFrom(resolve(RequestKind.ANY, "one off and justice for all"), "...And Justice for All", "One")
+        assertAlbumFrom(resolve(RequestKind.ANY, "one by metallica from the album and justice for all"), "...And Justice for All", "One")
+        assertAlbumFrom(resolve(RequestKind.ANY, "one from and justice for all by metallica"), "...And Justice for All", "One")
+        // The live album's title track, not the studio one.
+        assertAlbumFrom(resolve(RequestKind.ANY, "and justice for all from live in seoul"), "Live in Seoul", "And Justice For All")
+    }
+
+    @Test
+    fun `a song hint with its album plays the song on that album`() {
+        val request = PlayRequest.Search(RequestKind.SONG, "And Justice For All", "Metallica", shuffle = false, album = "Live in Seoul")
+        assertAlbumFrom(resolver.resolve(request), "Live in Seoul", "And Justice For All")
+    }
+
     @Test
     fun `parsed spoken requests resolve end to end`() {
         fun play(text: String) = resolver.resolve(VoiceRequestParser.parse(VoiceQuery(text)))
         assertAlbumFrom(play("play album And Justice For All by Metallica"), "...And Justice for All", "Blackened")
         assertAlbumFrom(play("play the album kill em all"), "Kill 'Em All", "Hit the Lights")
         assertAlbumFrom(play("play Fade to Black by Metallica"), "Ride the Lightning", "Fade to Black")
+        assertAlbumFrom(play("play Metallica's album Kill 'Em All"), "Kill 'Em All", "Hit the Lights")
+        assertAlbumFrom(play("play the Master of Puppets album by Metallica"), "Master of Puppets (Remastered)", "Battery")
+        assertAlbumFrom(play("play the song One from the album ...And Justice for All"), "...And Justice for All", "One")
+        assertAlbumFrom(play("play songs from the album Ride the Lightning"), "Ride the Lightning", "Fight Fire with Fire")
+        assertAlbumFrom(play("play the Enter Sandman song by Metallica"), "Metallica", "Enter Sandman")
     }
 }

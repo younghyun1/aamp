@@ -50,11 +50,11 @@ class LetterIndexTest {
     fun `library sections and recently added`() {
         val library = TestLibrary.build()
         val s = library.snapshot
-        assertEquals(listOf("A", "B", "D", "K", "L", "M", "N", "R"), s.albumLetters.labels.toList())
+        assertEquals(listOf("A", "B", "D", "G", "K", "L", "M", "N", "R"), s.albumLetters.labels.toList())
         val a = s.albumLetters.members(s.albumLetters.sectionOf("A")).map { s.albumTitles[it] }
         assertEquals(listOf("Ace of Spades", "...And Justice for All"), a)
         assertEquals(s.trackCount, (0 until s.trackLetters.size).sumOf { s.trackLetters.members(it).size })
-        assertEquals(library.album("Live in Seoul"), s.albumsByRecent.first())
+        assertEquals(library.album("Greatest Hits", "ABBA"), s.albumsByRecent.first())
         assertEquals(library.album("Kill 'Em All"), s.albumsByRecent.last())
     }
 }

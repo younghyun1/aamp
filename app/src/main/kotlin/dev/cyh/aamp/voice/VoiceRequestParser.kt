@@ -7,7 +7,9 @@ import dev.cyh.aamp.search.TextNormalizer
  *
  * Structured hints win when they name something: a focus of album with an album name is an album
  * request, whatever the text says. Otherwise the text is read for "album", "song", "songs by" and
- * similar markers; anything unmarked is [RequestKind.ANY] and the resolver decides.
+ * similar markers, before, after or inside the name ("Metallica's album Kill 'Em All"); anything
+ * unmarked is [RequestKind.ANY] and the resolver decides. Splitting the rest into title, artist and
+ * album is the resolver's job, because only the library can tell "Stand by Me" from "X by Y".
  */
 object VoiceRequestParser {
     // Values of android.intent.extra.focus (MediaStore entry content types), copied here so the
@@ -28,12 +30,18 @@ object VoiceRequestParser {
         listOf("music"), listOf("some", "music"), listOf("my", "music"), listOf("songs"), listOf("some", "songs"),
         listOf("something"), listOf("anything"), listOf("everything"), listOf("all"),
     )
-    private val albumPrefixes = listOf(listOf("the", "album"), listOf("album"), listOf("the", "record"), listOf("record"))
+    private val albumPrefixes = listOf(
+        listOf("the", "album"), listOf("album"), listOf("the", "record"), listOf("record"),
+        listOf("songs", "from", "the", "album"), listOf("songs", "from", "album"),
+        listOf("music", "from", "the", "album"), listOf("tracks", "from", "the", "album"),
+    )
     private val songPrefixes = listOf(listOf("the", "song"), listOf("song"), listOf("the", "track"), listOf("track"))
     private val artistPrefixes = listOf(
-        listOf("songs", "by"), listOf("music", "by"), listOf("tracks", "by"), listOf("everything", "by"),
-        listOf("anything", "by"), listOf("something", "by"), listOf("the", "artist"), listOf("artist"),
-        listOf("the", "band"), listOf("band"),
+        listOf("songs", "by"), listOf("music", "by"), listOf("tracks", "by"), listOf("stuff", "by"),
+        listOf("everything", "by"), listOf("anything", "by"), listOf("something", "by"),
+        listOf("songs", "from"), listOf("music", "from"), listOf("tracks", "from"), listOf("stuff", "from"),
+        listOf("everything", "from"), listOf("anything", "from"), listOf("something", "from"),
+        listOf("the", "artist"), listOf("artist"), listOf("the", "band"), listOf("band"),
     )
 
     fun parse(query: VoiceQuery): PlayRequest {
@@ -53,6 +61,8 @@ object VoiceRequestParser {
             words.size > 1 && words.last() == "album" -> search(RequestKind.ALBUM, words.dropLast(1), shuffle)
             stripPrefix(words, songPrefixes) -> search(RequestKind.SONG, words, shuffle)
             stripPrefix(words, artistPrefixes) -> search(RequestKind.ARTIST, words, shuffle = true)
+            removeInfix(words, Phrases.albumWords) -> search(RequestKind.ALBUM, words, shuffle)
+            removeInfix(words, Phrases.songWords) -> search(RequestKind.SONG, words, shuffle)
             else -> search(RequestKind.ANY, words, shuffle)
         }
     }
@@ -63,12 +73,12 @@ object VoiceRequestParser {
         val title = query.title?.takeIf { it.isNotBlank() }
         return when (query.focus) {
             FOCUS_ALBUM if album != null -> PlayRequest.Search(RequestKind.ALBUM, album, artist, shuffle)
-            FOCUS_SONG if title != null -> PlayRequest.Search(RequestKind.SONG, title, artist, shuffle)
+            FOCUS_SONG if title != null -> PlayRequest.Search(RequestKind.SONG, title, artist, shuffle, album)
             FOCUS_ARTIST if artist != null -> PlayRequest.Search(RequestKind.ARTIST, artist, null, shuffle = true)
             // Hints without a usable focus still help when the text says nothing.
             else if query.query.isBlank() -> when {
+                title != null -> PlayRequest.Search(RequestKind.SONG, title, artist, shuffle, album)
                 album != null -> PlayRequest.Search(RequestKind.ALBUM, album, artist, shuffle)
-                title != null -> PlayRequest.Search(RequestKind.SONG, title, artist, shuffle)
                 artist != null -> PlayRequest.Search(RequestKind.ARTIST, artist, null, shuffle = true)
                 else -> null
             }
@@ -88,6 +98,21 @@ object VoiceRequestParser {
         for (prefix in prefixes) {
             if (words.size >= prefix.size && words.subList(0, prefix.size) == prefix) {
                 repeat(prefix.size) { words.removeAt(0) }
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Removes a kind marker standing inside the request, as in "Metallica's album Kill 'Em All" or
+     * "Enter Sandman song by Metallica"; returns whether one was removed. A marker after "from" or
+     * "off (the)" names the album a song is on and stays for the resolver.
+     */
+    private fun removeInfix(words: MutableList<String>, markers: Set<String>): Boolean {
+        for (i in 1 until words.size - 1) {
+            if (words[i] in markers && !Phrases.followsAlbumSeparator(words, i)) {
+                words.removeAt(i)
                 return true
             }
         }

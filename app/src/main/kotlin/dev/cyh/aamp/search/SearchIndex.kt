@@ -19,9 +19,10 @@ class KindIndex private constructor(
 
     /**
      * Calls [onScore] for each entry scored against [query]. Entries are skipped only when they
-     * share no token with the query and a token candidate already matched strongly.
+     * share no token with the query and either a token candidate already matched strongly or
+     * [fuzzy] is false.
      */
-    fun scan(query: MatchKey, onScore: (index: Int, score: Float) -> Unit) {
+    fun scan(query: MatchKey, fuzzy: Boolean = true, onScore: (index: Int, score: Float) -> Unit) {
         if (query.isEmpty || keys.isEmpty()) return
         val seen = BooleanArray(keys.size)
         var strong = false
@@ -35,7 +36,7 @@ class KindIndex private constructor(
                 onScore(i, score)
             }
         }
-        if (strong) return
+        if (strong || !fuzzy) return
         for (i in keys.indices) {
             if (!seen[i]) onScore(i, Similarity.score(query, keys[i]))
         }
@@ -56,11 +57,14 @@ class KindIndex private constructor(
         return if (bestIndex >= 0) Hit(bestIndex, bestScore) else null
     }
 
-    /** Up to [limit] entries scoring at least [minScore], best first. */
-    fun top(query: MatchKey, limit: Int, minScore: Float): List<Hit> {
+    /**
+     * Up to [limit] entries scoring at least [minScore], best first. Without [fuzzy], only entries
+     * sharing a token with [query] are considered: much cheaper, and enough for close matches.
+     */
+    fun top(query: MatchKey, limit: Int, minScore: Float, fuzzy: Boolean = true): List<Hit> {
         if (limit <= 0) return emptyList()
         val hits = ArrayList<Hit>(limit + 1)
-        scan(query) { i, s ->
+        scan(query, fuzzy) { i, s ->
             if (s < minScore) return@scan
             if (hits.size == limit && s <= hits.last().score) return@scan
             var at = hits.size

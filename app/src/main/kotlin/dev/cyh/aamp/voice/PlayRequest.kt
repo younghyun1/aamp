@@ -24,13 +24,15 @@ sealed interface PlayRequest {
     data object ShuffleAll : PlayRequest
 
     /**
-     * Find and play [phrase]. Without a separate [artist] hint the phrase may still end in
-     * "by <artist>", which the resolver splits only when the artist exists in the library.
+     * Find and play [phrase]. Without a separate [artist] hint the phrase may still name an artist
+     * or album ("X by Y", "Y's X", "X from Y"), which the resolver splits off only when the library
+     * has a matching artist or album. [album] is a structured hint naming the album a song is on.
      */
     data class Search(
         val kind: RequestKind,
         val phrase: String,
         val artist: String?,
         val shuffle: Boolean,
+        val album: String? = null,
     ) : PlayRequest
 }

@@ -32,6 +32,23 @@ class VoiceRequestParserTest {
     }
 
     @Test
+    fun `markers inside the request`() {
+        assertEquals(Search(RequestKind.ALBUM, "metallicas kill em all", null, false), parse("play Metallica's album Kill 'Em All"))
+        assertEquals(Search(RequestKind.ALBUM, "master of puppets by metallica", null, false), parse("play Master of Puppets album by Metallica"))
+        assertEquals(Search(RequestKind.SONG, "the enter sandman by metallica", null, false), parse("play the Enter Sandman song by Metallica"))
+        // "From the album" names the album a song is on; the resolver splits it.
+        assertEquals(Search(RequestKind.ANY, "one from the album and justice for all", null, false), parse("play One from the album ...And Justice for All"))
+        assertEquals(Search(RequestKind.SONG, "one off the album and justice for all", null, false), parse("play the song One off the album ...And Justice for All"))
+    }
+
+    @Test
+    fun `artist and album phrasings with from`() {
+        assertEquals(Search(RequestKind.ARTIST, "metallica", null, true), parse("play songs from Metallica"))
+        assertEquals(Search(RequestKind.ARTIST, "metallica", null, true), parse("play something from Metallica"))
+        assertEquals(Search(RequestKind.ALBUM, "ride the lightning", null, false), parse("play songs from the album Ride the Lightning"))
+    }
+
+    @Test
     fun `unmarked requests are left to the resolver`() {
         assertEquals(Search(RequestKind.ANY, "metallica", null, false), parse("play Metallica"))
         assertEquals(Search(RequestKind.ANY, "stand by me", null, false), parse("play Stand by Me"))
@@ -67,6 +84,9 @@ class VoiceRequestParserTest {
 
         val song = VoiceQuery(query = "one", focus = VoiceRequestParser.FOCUS_SONG, title = "One", artist = "Metallica")
         assertEquals(Search(RequestKind.SONG, "One", "Metallica", false), VoiceRequestParser.parse(song))
+
+        val songOnAlbum = song.copy(album = "Live in Seoul")
+        assertEquals(Search(RequestKind.SONG, "One", "Metallica", false, "Live in Seoul"), VoiceRequestParser.parse(songOnAlbum))
 
         val artist = VoiceQuery(query = "metallica", focus = VoiceRequestParser.FOCUS_ARTIST, artist = "Metallica")
         assertEquals(Search(RequestKind.ARTIST, "Metallica", null, true), VoiceRequestParser.parse(artist))
