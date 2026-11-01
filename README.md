@@ -6,7 +6,7 @@ Since Gemini replaced Google Assistant, voice requests reach non-partner music a
 
 ## Status
 
-Working on an Android 17 phone through the Desktop Head Unit: Gemini requests reach aamp and play the right album, including garbled ones; Android Auto shows covers, A to Z sections, Recently added, and shuffle and repeat buttons; playback resumes where it stopped when Android Auto connects. Not yet tested in a car.
+Working on an Android 17 phone through the Desktop Head Unit: Gemini requests reach aamp and play the right album, including garbled ones and phrasings such as "X from Y", "Y's album X" or "X Y" without "by"; Android Auto shows covers, A to Z sections, Recently added, and shuffle and repeat buttons, and in the playback view the artist and album names open the artist's albums and the album's songs; playback resumes where it stopped when Android Auto connects. On the phone, aamp is a simple player: an album cover grid with an A to Z rail, album and artist pages, and play controls. Not yet tested in a car.
 
 Music inside a folder whose name starts with a dot (for example `...And Justice for All/`) is hidden from Android's media index and therefore from aamp; rename such folders.
 

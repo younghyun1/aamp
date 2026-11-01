@@ -14,7 +14,7 @@
         android:name=".AampApplication"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@android:style/Theme.DeviceDefault.DayNight">
+        android:theme="@style/Theme.Aamp">
 
         <!-- Declares aamp as an Android Auto media app. -->
         <meta-data
@@ -55,6 +55,18 @@
             android:authorities="dev.cyh.aamp.artwork"
             android:exported="true"
             tools:ignore="ExportedContentProvider" />
+
+        <!--
+            Compose brings androidx.startup initializers (emoji font loading, process lifecycle,
+            profile installation) that run reflectively at every process start, including the
+            playback service's when Android Auto connects. None is needed, so the provider is removed.
+            Lint cannot resolve classes of removed nodes, hence MissingClass.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            tools:ignore="MissingClass"
+            tools:node="remove" />
 
         <!-- Exported without a permission: Android Auto, Gemini and system media controls must bind to it. -->
         <service

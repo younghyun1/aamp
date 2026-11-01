@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -29,6 +30,10 @@ android {
         }
     }
 
+    buildFeatures {
+        compose = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -46,5 +51,11 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.guava)
+    // Phone screen only; nothing on the Android Auto path loads these.
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.foundation)
+    implementation(libs.activity.compose)
+    implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.media3.ui.compose)
     testImplementation(libs.junit)
 }

@@ -48,5 +48,15 @@
     <string name="ui_library_stats">Tracks: %1$d. Albums: %2$d. Artists: %3$d. Scan took %4$d ms.</string>
     <string name="ui_library_failed">Library scan failed: %1$s</string>
     <string name="ui_voice_title">Voice requests</string>
+    <string name="ui_no_music">No music found. Android only indexes music in shared folders such as Music.</string>
+    <string name="ui_not_found">This is no longer in the library.</string>
+    <string name="ui_status">Status</string>
+    <string name="ui_back">Back</string>
+    <string name="ui_play">Play</string>
+    <string name="ui_pause">Pause</string>
+    <string name="ui_next">Next</string>
+    <string name="ui_previous">Previous</string>
+    <string name="ui_shuffle">Shuffle</string>
+    <string name="ui_show_songs">Show songs</string>
     <string name="ui_voice_empty">No voice requests yet. Ask Gemini in Android Auto to play something with aamp open.</string>
 </resources>

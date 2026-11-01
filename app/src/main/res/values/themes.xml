@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws everything, including the header, so the window has no action bar. -->
+    <style name="Theme.Aamp" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>
