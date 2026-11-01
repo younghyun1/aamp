@@ -7,6 +7,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
+import androidx.annotation.StringRes
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +33,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,7 +42,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,15 +68,27 @@ import kotlinx.coroutines.launch
 
 /** A page of the phone screen; pages stack, and back returns to the previous one. */
 internal sealed interface Screen {
-    data object Albums : Screen
+    /** The library tabs. */
+    data object Home : Screen
     data object Status : Screen
     data class Album(val albumId: Long) : Screen
     data class Artist(val artistKey: Long) : Screen
+    data class Genre(val genreKey: Long) : Screen
+}
+
+/** The library tabs on the home page. */
+internal enum class Tab(@StringRes val label: Int) {
+    Albums(R.string.browse_albums),
+    Artists(R.string.browse_artists),
+    Songs(R.string.browse_songs),
+    Genres(R.string.ui_genres),
 }
 
 /**
- * The phone screen: every album as a cover grid, album and artist pages, the playing track with
- * controls, and a status page with permissions and the voice log.
+ * The phone screen: the library as Albums, Artists, Songs and Genres tabs, album, artist and genre
+ * pages, the playing track with controls, and a status page with permissions and the voice log.
+ * Every page keeps its scroll position while it is on the back stack. Nothing animates: pages and
+ * tabs switch at once, and letter jumps scroll without animation.
  */
 @Composable
 internal fun AampApp() {
@@ -100,11 +119,20 @@ internal fun AampApp() {
     }
     val requestAccess = { permissions.launch(arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES)) }
 
-    val stack = rememberSaveable(saver = StackSaver) { mutableStateListOf<Screen>(Screen.Albums) }
+    val stack = rememberSaveable(saver = StackSaver) { mutableStateListOf<Screen>(Screen.Home) }
+    var tab by rememberSaveable { mutableStateOf(Tab.Albums) }
+    // Keeps each page's saveable state (scroll positions) while it is covered by another page.
+    val pageStates = rememberSaveableStateHolder()
     val open: (Screen) -> Unit = { if (stack.last() != it) stack += it }
-    BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.lastIndex) }
+    val back = {
+        val closed = stack.removeAt(stack.lastIndex)
+        if (closed !in stack) pageStates.removeState(encode(closed))
+    }
+    BackHandler(enabled = stack.size > 1, onBack = back)
     val screen = stack.last()
     val playingTrackId = currentTrackId(controller)
+    val openAlbum: (Long) -> Unit = { open(Screen.Album(it)) }
+    val openArtist: (Long) -> Unit = { open(Screen.Artist(it)) }
 
     Column(
         Modifier
@@ -115,50 +143,65 @@ internal fun AampApp() {
         Header(
             title = title(screen, snapshot),
             canGoBack = stack.size > 1,
-            onBack = { stack.removeAt(stack.lastIndex) },
+            onBack = back,
             onStatus = if (screen != Screen.Status) ({ open(Screen.Status) }) else null,
         )
+        if (screen == Screen.Home) Tabs(tab, onSelect = { tab = it })
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (screen) {
-                Screen.Status -> StatusScreen(libraryState, access, requestAccess, rescan)
-                Screen.Albums -> when {
-                    snapshot == null -> LibraryMessage(libraryState, requestAccess, rescan)
-                    snapshot.albumCount == 0 -> Message(stringResource(R.string.ui_no_music))
-                    else -> AlbumGrid(
-                        snapshot,
-                        albums = null,
-                        covers = covers,
-                        onPlay = { controller?.playId(MediaId.Album(snapshot.albumIds[it])) },
-                        onOpen = { open(Screen.Album(snapshot.albumIds[it])) },
-                    )
-                }
-                is Screen.Album -> {
-                    val album = snapshot?.albumIndex(screen.albumId) ?: -1
-                    if (snapshot != null && album >= 0) {
-                        AlbumScreen(snapshot, album, covers, controller, playingTrackId, onOpenArtist = { open(Screen.Artist(it)) })
-                    } else {
-                        Message(stringResource(R.string.ui_not_found))
+            pageStates.SaveableStateProvider(encode(screen)) {
+                when (screen) {
+                    Screen.Status -> StatusScreen(libraryState, access, requestAccess, rescan)
+                    Screen.Home -> when {
+                        snapshot == null -> LibraryMessage(libraryState, requestAccess, rescan)
+                        snapshot.trackCount == 0 -> Message(stringResource(R.string.ui_no_music))
+                        // Each tab keeps its own scroll position too.
+                        else -> pageStates.SaveableStateProvider("tab:${tab.name}") {
+                            when (tab) {
+                                Tab.Albums -> AlbumGrid(
+                                    snapshot,
+                                    albums = null,
+                                    covers = covers,
+                                    onOpen = { openAlbum(snapshot.albumIds[it]) },
+                                    onPlay = { controller?.playId(MediaId.Album(snapshot.albumIds[it])) },
+                                )
+                                Tab.Artists -> ArtistList(snapshot, covers, openArtist)
+                                Tab.Songs -> SongList(snapshot, controller, playingTrackId)
+                                Tab.Genres -> if (snapshot.genreCount > 0) {
+                                    GenreList(snapshot, onOpen = { open(Screen.Genre(it)) })
+                                } else {
+                                    Message(stringResource(R.string.ui_no_genres))
+                                }
+                            }
+                        }
                     }
-                }
-                is Screen.Artist -> {
-                    val artist = snapshot?.artistIndex(screen.artistKey) ?: -1
-                    if (snapshot != null && artist >= 0) {
-                        ArtistScreen(snapshot, artist, covers, controller, playingTrackId, onOpenAlbum = { open(Screen.Album(it)) })
-                    } else {
-                        Message(stringResource(R.string.ui_not_found))
+                    is Screen.Album -> {
+                        val album = snapshot?.albumIndex(screen.albumId) ?: -1
+                        if (snapshot != null && album >= 0) {
+                            AlbumScreen(snapshot, album, covers, controller, playingTrackId, openArtist)
+                        } else {
+                            Message(stringResource(R.string.ui_not_found))
+                        }
+                    }
+                    is Screen.Artist -> {
+                        val artist = snapshot?.artistIndex(screen.artistKey) ?: -1
+                        if (snapshot != null && artist >= 0) {
+                            ArtistScreen(snapshot, artist, covers, controller, playingTrackId, openAlbum)
+                        } else {
+                            Message(stringResource(R.string.ui_not_found))
+                        }
+                    }
+                    is Screen.Genre -> {
+                        val genre = snapshot?.genreIndex(screen.genreKey) ?: -1
+                        if (snapshot != null && genre >= 0) {
+                            GenreScreen(snapshot, genre, covers, controller, openAlbum)
+                        } else {
+                            Message(stringResource(R.string.ui_not_found))
+                        }
                     }
                 }
             }
         }
-        if (controller != null) {
-            NowPlayingBar(
-                controller,
-                snapshot,
-                covers,
-                onOpenAlbum = { open(Screen.Album(it)) },
-                onOpenArtist = { open(Screen.Artist(it)) },
-            )
-        }
+        if (controller != null) NowPlayingBar(controller, snapshot, covers, openAlbum, openArtist)
         // Behind the navigation bar, in the color of whatever is above it.
         Spacer(Modifier.fillMaxWidth().windowInsetsBottomHeight(WindowInsets.navigationBars).background(colors.surface))
     }
@@ -181,12 +224,38 @@ private fun Header(title: String, canGoBack: Boolean, onBack: () -> Unit, onStat
     }
 }
 
+/** The tab labels, the selected one in the accent color and underlined. */
+@Composable
+private fun Tabs(selected: Tab, onSelect: (Tab) -> Unit) {
+    val colors = LocalColors.current
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+        for (tab in Tab.entries) {
+            val active = tab == selected
+            Column(
+                Modifier
+                    .weight(1f)
+                    .selectable(selected = active, role = Role.Tab) { onSelect(tab) }
+                    .padding(top = 8.dp, bottom = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                BasicText(
+                    stringResource(tab.label),
+                    style = if (active) colors.body.copy(color = colors.accent, fontWeight = FontWeight.Medium) else colors.body.copy(color = colors.muted),
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(Modifier.width(28.dp).height(2.dp).background(if (active) colors.accent else Color.Transparent))
+            }
+        }
+    }
+}
+
 @Composable
 private fun title(screen: Screen, snapshot: LibrarySnapshot?): String = when (screen) {
-    Screen.Albums -> stringResource(R.string.app_name)
+    Screen.Home -> stringResource(R.string.app_name)
     Screen.Status -> stringResource(R.string.ui_status)
     is Screen.Album -> snapshot?.albumIndex(screen.albumId)?.takeIf { it >= 0 }?.let { snapshot.albumTitles[it] }.orEmpty()
     is Screen.Artist -> snapshot?.artistIndex(screen.artistKey)?.takeIf { it >= 0 }?.let { snapshot.artistNames[it] }.orEmpty()
+    is Screen.Genre -> snapshot?.genreIndex(screen.genreKey)?.takeIf { it >= 0 }?.let { snapshot.genreNames[it] }.orEmpty()
 }
 
 /** What the albums page shows until the library is ready. */
@@ -231,20 +300,22 @@ private fun Context.access(): Access = Access(
 /** Saves the page stack across configuration changes and process death as strings. */
 private val StackSaver = Saver<SnapshotStateList<Screen>, List<String>>(
     save = { stack -> stack.map(::encode) },
-    restore = { saved -> mutableStateListOf<Screen>().apply { saved.mapNotNullTo(this, ::decode) }.ifEmpty { mutableStateListOf(Screen.Albums) } },
+    restore = { saved -> mutableStateListOf<Screen>().apply { saved.mapNotNullTo(this, ::decode) }.ifEmpty { mutableStateListOf(Screen.Home) } },
 )
 
 private fun encode(screen: Screen): String = when (screen) {
-    Screen.Albums -> "albums"
+    Screen.Home -> "home"
     Screen.Status -> "status"
     is Screen.Album -> "album:${screen.albumId}"
     is Screen.Artist -> "artist:${screen.artistKey}"
+    is Screen.Genre -> "genre:${screen.genreKey}"
 }
 
 private fun decode(raw: String): Screen? = when {
-    raw == "albums" -> Screen.Albums
+    raw == "home" -> Screen.Home
     raw == "status" -> Screen.Status
     raw.startsWith("album:") -> raw.removePrefix("album:").toLongOrNull()?.let(Screen::Album)
     raw.startsWith("artist:") -> raw.removePrefix("artist:").toLongOrNull()?.let(Screen::Artist)
+    raw.startsWith("genre:") -> raw.removePrefix("genre:").toLongOrNull()?.let(Screen::Genre)
     else -> null
 }

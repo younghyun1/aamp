@@ -119,8 +119,8 @@ internal fun ArtistScreen(
             snapshot,
             albums,
             covers,
-            onPlay = { player?.playId(MediaId.Album(snapshot.albumIds[it])) },
             onOpen = { onOpenAlbum(snapshot.albumIds[it]) },
+            onPlay = { player?.playId(MediaId.Album(snapshot.albumIds[it])) },
             header = header,
         )
         return
@@ -142,8 +142,31 @@ internal fun ArtistScreen(
     }
 }
 
+/** A genre's albums, with a button that shuffles all its songs. */
 @Composable
-private fun TrackRow(number: String, title: String, subtitle: String?, durationMs: Long, playing: Boolean, onClick: () -> Unit) {
+internal fun GenreScreen(snapshot: LibrarySnapshot, genre: Int, covers: CoverLoader, player: Player?, onOpenAlbum: (albumId: Long) -> Unit) {
+    val genreKey = snapshot.genreKeys[genre]
+    val albums = remember(snapshot, genre) { snapshot.genreAlbums(genre) }
+    AlbumGrid(
+        snapshot,
+        albums,
+        covers,
+        onOpen = { onOpenAlbum(snapshot.albumIds[it]) },
+        onPlay = { player?.playId(MediaId.Album(snapshot.albumIds[it])) },
+        header = {
+            val colors = LocalColors.current
+            val count = snapshot.genreTrackCount(genre)
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                BasicText(pluralStringResource(R.plurals.browse_song_count, count, count), style = colors.caption, modifier = Modifier.weight(1f))
+                PillButton(stringResource(R.string.ui_shuffle), onClick = { player?.playId(MediaId.Genre(genreKey)) })
+            }
+        },
+    )
+}
+
+/** A song: optional track number, title, a second line, and length; the playing one is highlighted. */
+@Composable
+internal fun TrackRow(number: String?, title: String, subtitle: String?, durationMs: Long, playing: Boolean, onClick: () -> Unit) {
     val colors = LocalColors.current
     val titleStyle = if (playing) colors.body.copy(color = colors.accent, fontWeight = FontWeight.Medium) else colors.body
     Row(
@@ -153,7 +176,7 @@ private fun TrackRow(number: String, title: String, subtitle: String?, durationM
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BasicText(number, style = colors.caption, modifier = Modifier.width(36.dp))
+        if (number != null) BasicText(number, style = colors.caption, modifier = Modifier.width(36.dp))
         Column(Modifier.weight(1f)) {
             BasicText(title, style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) BasicText(subtitle, style = colors.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
