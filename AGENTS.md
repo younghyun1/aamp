@@ -30,6 +30,7 @@ app/src/main/kotlin/dev/cyh/aamp/
   search/     TextNormalizer, MatchKey, Similarity, SearchIndex
   voice/      VoiceRequestParser, QueueResolver, VoiceLog, PlayFromSearchActivity
   browse/     media ids and the Android Auto browse items
+  widget/     NowPlayingWidget, the home screen widget the playback service updates
   ui/         Compose phone screen: library tabs, album, artist and genre pages, now-playing bar, status
 app/src/test/kotlin/dev/cyh/aamp/   JVM unit tests; TestLibrary is the shared fixture
 docs/plans/                         design notes, YYYY-MM-DD-name.md

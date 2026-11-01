@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The home screen widget. The root uses @android:id/background so the launcher can animate from
+    it when the widget opens aamp. Also the picker's preview, so the idle text is the default.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:clipToOutline="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="8dp">
+
+    <ImageView
+        android:id="@+id/widget_cover"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/widget_cover_background"
+        android:clipToOutline="true"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop"
+        android:src="@drawable/ic_launcher_foreground" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_idle_title"
+            android:textColor="@color/widget_text"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/widget_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_idle_subtitle"
+            android:textColor="@color/widget_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/widget_previous"
+        style="@style/WidgetButton"
+        android:contentDescription="@string/ui_previous"
+        android:src="@drawable/media3_icon_previous" />
+
+    <ImageButton
+        android:id="@+id/widget_play_pause"
+        style="@style/WidgetButton"
+        android:contentDescription="@string/ui_play"
+        android:src="@drawable/media3_icon_play" />
+
+    <ImageButton
+        android:id="@+id/widget_next"
+        style="@style/WidgetButton"
+        android:contentDescription="@string/ui_next"
+        android:src="@drawable/media3_icon_next" />
+</LinearLayout>

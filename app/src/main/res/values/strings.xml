@@ -60,5 +60,10 @@
     <string name="ui_show_songs">Show songs</string>
     <string name="ui_genres">Genres</string>
     <string name="ui_no_genres">No genre tags found in your music.</string>
+    <!-- Home screen widget -->
+    <string name="widget_description">The playing song with play controls</string>
+    <string name="widget_idle_title">Not playing</string>
+    <string name="widget_idle_subtitle">Tap play to resume</string>
+
     <string name="ui_voice_empty">No voice requests yet. Ask Gemini in Android Auto to play something with aamp open.</string>
 </resources>

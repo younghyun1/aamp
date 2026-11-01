@@ -6,11 +6,13 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import dev.cyh.aamp.R
 import dev.cyh.aamp.aamp
+import dev.cyh.aamp.widget.NowPlayingWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,7 +30,8 @@ import java.io.File
  * current state.
  *
  * The queue is saved on every track change and pause, so playback can resume after the process
- * dies; see [LibraryCallback.onPlaybackResumption].
+ * dies; see [LibraryCallback.onPlaybackResumption]. The home screen widget gets every change of
+ * track or play state.
  */
 @OptIn(UnstableApi::class) // Command buttons that carry a player command parameter
 class PlaybackService : MediaLibraryService() {
@@ -71,6 +74,10 @@ class PlaybackService : MediaLibraryService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (!isPlaying) saveQueue(player, queueStore)
             }
+
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (events.containsAny(*WIDGET_EVENTS)) updateWidget(player)
+            }
         })
     }
 
@@ -82,6 +89,7 @@ class PlaybackService : MediaLibraryService() {
             it.release()
         }
         session = null
+        NowPlayingWidget.stopped(this)
         scope.cancel()
         super.onDestroy()
     }
@@ -101,6 +109,17 @@ class PlaybackService : MediaLibraryService() {
         aamp.appScope.launch(queueWriter) { store.write(saved) }
     }
 
+    private fun updateWidget(player: Player) {
+        val metadata = player.mediaMetadata
+        val state = if (player.currentMediaItem == null) null else NowPlayingWidget.State(
+            title = metadata.title?.toString(),
+            artist = metadata.artist?.toString(),
+            artworkUri = metadata.artworkUri,
+            playing = !Util.shouldShowPlayButton(player),
+        )
+        NowPlayingWidget.show(this, state)
+    }
+
     /** Shuffle and repeat buttons showing the current mode; each tap moves to the next mode. */
     private fun controlButtons(player: Player): List<CommandButton> {
         val shuffle = if (player.shuffleModeEnabled) {
@@ -117,6 +136,16 @@ class PlaybackService : MediaLibraryService() {
                 button(CommandButton.ICON_REPEAT_OFF, R.string.control_repeat_off, Player.COMMAND_SET_REPEAT_MODE, Player.REPEAT_MODE_ALL)
         }
         return listOf(shuffle, repeat)
+    }
+
+    private companion object {
+        /** Changes the widget shows: the track, its metadata, and whether it plays. */
+        val WIDGET_EVENTS = intArrayOf(
+            Player.EVENT_MEDIA_ITEM_TRANSITION,
+            Player.EVENT_MEDIA_METADATA_CHANGED,
+            Player.EVENT_PLAY_WHEN_READY_CHANGED,
+            Player.EVENT_PLAYBACK_STATE_CHANGED,
+        )
     }
 
     private fun button(icon: Int, name: Int, command: Int, next: Any): CommandButton =
