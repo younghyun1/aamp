@@ -34,6 +34,15 @@ object LibraryBuilder {
             for (row in album.tracks) noteArtist(displayArtist(row.artist))
         }
         val artistOrder = artistDisplay.keys.sorted()
+
+        // Genres: merged by normalized name like artists, displayed as first seen.
+        val genreDisplay = HashMap<String, String>()
+        for (album in albums) {
+            for (row in album.tracks) if (row.genre.isNotBlank()) genreDisplay.putIfAbsent(artistKeyText(row.genre), row.genre.trim())
+        }
+        val genreOrder = genreDisplay.keys.sorted()
+        val genreIndexByText = HashMap<String, Int>(genreOrder.size * 2)
+        genreOrder.forEachIndexed { i, key -> genreIndexByText[key] = i }
         val artistIndexByText = HashMap<String, Int>(artistOrder.size * 2)
         artistOrder.forEachIndexed { i, key -> artistIndexByText[key] = i }
         fun artistIndex(name: String): Int = artistIndexByText.getValue(artistKeyText(name))
@@ -47,6 +56,7 @@ object LibraryBuilder {
         val trackDisc = IntArray(trackCount)
         val trackNumber = IntArray(trackCount)
         val trackDuration = LongArray(trackCount)
+        val trackGenre = IntArray(trackCount)
 
         val albumCount = albums.size
         val albumIds = LongArray(albumCount)
@@ -74,6 +84,7 @@ object LibraryBuilder {
                 trackDisc[t] = row.discNumber
                 trackNumber[t] = row.trackNumber
                 trackDuration[t] = row.durationMs
+                trackGenre[t] = if (row.genre.isBlank()) -1 else genreIndexByText.getValue(artistKeyText(row.genre))
                 t++
             }
         }
@@ -93,6 +104,21 @@ object LibraryBuilder {
         val (albumOffsets, albumList) = flatten(albumsPerArtist)
         val (trackOffsets, trackList) = flatten(tracksPerArtist)
 
+        // Genre to track and genre to album lists. Tracks are in album order and albums are
+        // contiguous, so a genre's albums come out in title order without duplicates.
+        val genreCount = genreOrder.size
+        val tracksPerGenre = Array(genreCount) { ArrayList<Int>() }
+        val albumsPerGenre = Array(genreCount) { ArrayList<Int>() }
+        for (i in 0 until trackCount) {
+            val g = trackGenre[i]
+            if (g < 0) continue
+            tracksPerGenre[g] += i
+            val albumsOfGenre = albumsPerGenre[g]
+            if (albumsOfGenre.lastOrNull() != trackAlbum[i]) albumsOfGenre += trackAlbum[i]
+        }
+        val (genreTrackOffsets, genreTrackList) = flatten(tracksPerGenre)
+        val (genreAlbumOffsets, genreAlbumList) = flatten(albumsPerGenre)
+
         val titles = trackTitleKeys.requireAll()
         val tracksByTitle = (0 until trackCount).sortedWith(compareBy<Int>({ titles[it] }, { it })).toIntArray()
         // Newest first; albums added in the same scan keep title order.
@@ -106,6 +132,7 @@ object LibraryBuilder {
             trackDisc = trackDisc,
             trackNumber = trackNumber,
             trackDurationMs = trackDuration,
+            trackGenre = trackGenre,
             albumIds = albumIds,
             albumTitles = albumTitles.requireAll(),
             albumArtist = albumArtist,
@@ -118,6 +145,12 @@ object LibraryBuilder {
             artistAlbumList = albumList,
             artistTrackOffsets = trackOffsets,
             artistTrackList = trackList,
+            genreNames = Array(genreCount) { genreDisplay.getValue(genreOrder[it]) },
+            genreKeys = LongArray(genreCount) { fnv1a64(genreOrder[it]) },
+            genreAlbumOffsets = genreAlbumOffsets,
+            genreAlbumList = genreAlbumList,
+            genreTrackOffsets = genreTrackOffsets,
+            genreTrackList = genreTrackList,
             tracksByTitle = tracksByTitle,
             albumsByRecent = albumsByRecent,
             albumLetters = LetterIndex.build(IntArray(albumCount) { it }) { albums[it].titleKey },
@@ -169,7 +202,10 @@ object LibraryBuilder {
 
     private fun displayArtist(name: String): String = name.trim().ifEmpty { UNKNOWN_ARTIST }
 
-    /** Identity of an artist: the normalized name, or the lowercased name if that normalizes to nothing. */
+    /**
+     * Identity of an artist or genre: the normalized name, or the lowercased name if that
+     * normalizes to nothing.
+     */
     private fun artistKeyText(name: String): String =
         TextNormalizer.normalize(name).ifEmpty { name.trim().lowercase() }
 
@@ -187,7 +223,7 @@ object LibraryBuilder {
         checkNotNull(this[i]) { "entry $i was never filled" }
     }
 
-    /** 64-bit FNV-1a over UTF-16 units: a stable artist id that survives rescans. */
+    /** 64-bit FNV-1a over UTF-16 units: a stable artist or genre id that survives rescans. */
     internal fun fnv1a64(text: String): Long {
         var hash = -0x340d631b7bdddcdbL
         for (ch in text) {

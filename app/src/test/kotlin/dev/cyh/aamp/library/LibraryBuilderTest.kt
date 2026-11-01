@@ -81,4 +81,27 @@ class LibraryBuilderTest {
         assertEquals(0, empty.trackCount)
         assertEquals(0, empty.albumCount)
     }
+
+    @Test
+    fun `genres merge by normalized name and list their albums in title order`() {
+        assertEquals(listOf("Alternative", "Heavy Metal", "Pop", "Rock", "Soul", "Thrash Metal"), snapshot.genreNames.toList())
+        val thrash = snapshot.genreNames.indexOf("Thrash Metal")
+        assertEquals(
+            listOf("...And Justice for All", "Kill 'Em All", "Master of Puppets (Remastered)", "Ride the Lightning"),
+            snapshot.genreAlbums(thrash).map { snapshot.albumTitles[it] },
+        )
+        assertEquals(15, snapshot.genreTrackCount(thrash))
+        assertEquals(thrash, snapshot.genreIndex(snapshot.genreKeys[thrash]))
+        val heavy = snapshot.genreNames.indexOf("Heavy Metal")
+        assertEquals(listOf("Ace of Spades", "Metallica"), snapshot.genreAlbums(heavy).map { snapshot.albumTitles[it] })
+        // Untagged tracks belong to no genre.
+        val live = library.album("Live in Seoul")
+        assertEquals(-1, snapshot.trackGenre[snapshot.albumFirstTrack[live]])
+    }
+
+    @Test
+    fun `an artist's cover is their newest album or the album they appear on`() {
+        assertEquals(library.album("Live in Seoul"), snapshot.artistCoverAlbum(library.artist("Metallica")))
+        assertEquals(library.album("Now That's What I Call Music"), snapshot.artistCoverAlbum(library.artist("Artist A")))
+    }
 }

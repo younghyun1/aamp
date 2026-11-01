@@ -2,7 +2,7 @@ package dev.cyh.aamp.browse
 
 /**
  * Media ids shared with Android Auto. They identify browse nodes and playable items by stable
- * MediaStore ids (tracks, albums), name hashes (artists) or section labels, never by snapshot
+ * MediaStore ids (tracks, albums), name hashes (artists, genres) or section labels, never by snapshot
  * index, so ids held by Android Auto stay valid across rescans.
  *
  * A track id carries the list it was picked from (`track:42@album:7`), because picking a track
@@ -22,12 +22,14 @@ sealed interface MediaId {
     data class SongSection(val label: String) : MediaId
     data class Album(val albumId: Long) : MediaId
     data class Artist(val artistKey: Long) : MediaId
+    data class Genre(val genreKey: Long) : MediaId
     data class Track(val trackId: Long, val context: TrackContext) : MediaId
 }
 
 sealed interface TrackContext {
     data class InAlbum(val albumId: Long) : TrackContext
     data class InArtist(val artistKey: Long) : TrackContext
+    data class InGenre(val genreKey: Long) : TrackContext
     data object InSongs : TrackContext
     data object None : TrackContext
 }
@@ -45,6 +47,7 @@ object MediaIds {
     private const val SONG_SECTION = "songs:"
     private const val ALBUM = "album:"
     private const val ARTIST = "artist:"
+    private const val GENRE = "genre:"
     private const val TRACK = "track:"
 
     fun encode(id: MediaId): String = when (id) {
@@ -60,9 +63,11 @@ object MediaIds {
         is MediaId.SongSection -> SONG_SECTION + id.label
         is MediaId.Album -> ALBUM + id.albumId
         is MediaId.Artist -> ARTIST + id.artistKey
+        is MediaId.Genre -> GENRE + id.genreKey
         is MediaId.Track -> TRACK + id.trackId + when (val c = id.context) {
             is TrackContext.InAlbum -> "@" + ALBUM + c.albumId
             is TrackContext.InArtist -> "@" + ARTIST + c.artistKey
+            is TrackContext.InGenre -> "@" + GENRE + c.genreKey
             TrackContext.InSongs -> "@" + SONGS
             TrackContext.None -> ""
         }
@@ -82,6 +87,7 @@ object MediaIds {
         raw.startsWith(SONG_SECTION) -> raw.removePrefix(SONG_SECTION).ifEmpty { null }?.let(MediaId::SongSection)
         raw.startsWith(ALBUM) -> raw.removePrefix(ALBUM).toLongOrNull()?.let(MediaId::Album)
         raw.startsWith(ARTIST) -> raw.removePrefix(ARTIST).toLongOrNull()?.let(MediaId::Artist)
+        raw.startsWith(GENRE) -> raw.removePrefix(GENRE).toLongOrNull()?.let(MediaId::Genre)
         raw.startsWith(TRACK) -> parseTrack(raw.removePrefix(TRACK))
         else -> null
     }
@@ -93,6 +99,7 @@ object MediaIds {
         val context = when (val parent = parse(rest.substring(at + 1))) {
             is MediaId.Album -> TrackContext.InAlbum(parent.albumId)
             is MediaId.Artist -> TrackContext.InArtist(parent.artistKey)
+            is MediaId.Genre -> TrackContext.InGenre(parent.genreKey)
             MediaId.Songs -> TrackContext.InSongs
             else -> return null
         }

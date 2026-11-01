@@ -21,6 +21,8 @@ class LibrarySnapshot internal constructor(
     val trackDisc: IntArray,
     val trackNumber: IntArray,
     val trackDurationMs: LongArray,
+    /** Genre of each track, or -1 for none. */
+    val trackGenre: IntArray,
     val albumIds: LongArray,
     val albumTitles: Array<String>,
     val albumArtist: IntArray,
@@ -33,6 +35,13 @@ class LibrarySnapshot internal constructor(
     private val artistAlbumList: IntArray,
     private val artistTrackOffsets: IntArray,
     private val artistTrackList: IntArray,
+    /** Genres ordered by normalized name; keys are stable across rescans like artist keys. */
+    val genreNames: Array<String>,
+    val genreKeys: LongArray,
+    private val genreAlbumOffsets: IntArray,
+    private val genreAlbumList: IntArray,
+    private val genreTrackOffsets: IntArray,
+    private val genreTrackList: IntArray,
     /** Track indices ordered by normalized title, for the Songs list. */
     val tracksByTitle: IntArray,
     /** Album indices, most recently added first. */
@@ -45,10 +54,12 @@ class LibrarySnapshot internal constructor(
     private val trackById = LongIntMap.indexOf(trackIds)
     private val albumById = LongIntMap.indexOf(albumIds)
     private val artistByKey = LongIntMap.indexOf(artistKeys)
+    private val genreByKey = LongIntMap.indexOf(genreKeys)
 
     val trackCount: Int get() = trackIds.size
     val albumCount: Int get() = albumIds.size
     val artistCount: Int get() = artistNames.size
+    val genreCount: Int get() = genreNames.size
 
     /** Track indices of album [album], in play order. */
     fun albumTracks(album: Int): IntArray {
@@ -68,6 +79,26 @@ class LibrarySnapshot internal constructor(
 
     fun artistTrackCount(artist: Int): Int = artistTrackOffsets[artist + 1] - artistTrackOffsets[artist]
 
+    /**
+     * The album whose cover stands for [artist]: their newest album, or for an artist who only
+     * appears on other artists' albums, the album of their first track.
+     */
+    fun artistCoverAlbum(artist: Int): Int {
+        val albums = artistAlbumOffsets[artist + 1]
+        if (albums > artistAlbumOffsets[artist]) return artistAlbumList[albums - 1]
+        return trackAlbum[artistTrackList[artistTrackOffsets[artist]]]
+    }
+
+    /** Albums with at least one track in [genre], in title order. */
+    fun genreAlbums(genre: Int): IntArray = genreAlbumList.copyOfRange(genreAlbumOffsets[genre], genreAlbumOffsets[genre + 1])
+
+    /** Tracks in [genre], in album order. */
+    fun genreTracks(genre: Int): IntArray = genreTrackList.copyOfRange(genreTrackOffsets[genre], genreTrackOffsets[genre + 1])
+
+    fun genreAlbumCount(genre: Int): Int = genreAlbumOffsets[genre + 1] - genreAlbumOffsets[genre]
+
+    fun genreTrackCount(genre: Int): Int = genreTrackOffsets[genre + 1] - genreTrackOffsets[genre]
+
     /** Index of the track with MediaStore id [trackId], or -1. */
     fun trackIndex(trackId: Long): Int = trackById[trackId]
 
@@ -76,6 +107,9 @@ class LibrarySnapshot internal constructor(
 
     /** Index of the artist with stable key [artistKey], or -1. */
     fun artistIndex(artistKey: Long): Int = artistByKey[artistKey]
+
+    /** Index of the genre with stable key [genreKey], or -1. */
+    fun genreIndex(genreKey: Long): Int = genreByKey[genreKey]
 }
 
 /** A snapshot and the search index built from it; always replaced together. */

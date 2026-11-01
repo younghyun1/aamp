@@ -275,6 +275,9 @@ internal class LibraryCallback(
                     is TrackContext.InArtist -> s.artistIndex(c.artistKey).takeIf { it >= 0 }
                         ?.let { resolver.artist(it, shuffle = false, startTrack = t) }
                         ?: resolver.album(s.trackAlbum[t], t)
+                    is TrackContext.InGenre -> s.genreIndex(c.genreKey).takeIf { it >= 0 }
+                        ?.let { resolver.genre(it, shuffle = false, startTrack = t) }
+                        ?: resolver.album(s.trackAlbum[t], t)
                     TrackContext.InSongs -> resolver.songs(t)
                     TrackContext.None -> resolver.album(s.trackAlbum[t], t)
                 }
@@ -282,6 +285,7 @@ internal class LibraryCallback(
             is MediaId.Album -> s.albumIndex(id.albumId).takeIf { it >= 0 }?.let { resolver.album(it) }
             is MediaId.Artist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { resolver.artist(it, shuffle = true) }
             is MediaId.ShuffleArtist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { resolver.artist(it, shuffle = true) }
+            is MediaId.Genre -> s.genreIndex(id.genreKey).takeIf { it >= 0 }?.let { resolver.genre(it, shuffle = true) }
             MediaId.ShuffleAll -> resolver.shuffleAll()
             MediaId.Root, MediaId.Albums, MediaId.Artists, MediaId.Recent, MediaId.Songs,
             is MediaId.AlbumSection, is MediaId.ArtistSection, is MediaId.SongSection -> null
@@ -298,6 +302,9 @@ internal class LibraryCallback(
             }
             is MediaId.Artist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { r ->
                 s.artistTracks(r).map { items.track(s, it, TrackContext.InArtist(id.artistKey)) }
+            }
+            is MediaId.Genre -> s.genreIndex(id.genreKey).takeIf { it >= 0 }?.let { g ->
+                s.genreTracks(g).map { items.track(s, it, TrackContext.InGenre(id.genreKey)) }
             }
             else -> null
         } ?: if (item.localConfiguration != null) listOf(item) else emptyList()

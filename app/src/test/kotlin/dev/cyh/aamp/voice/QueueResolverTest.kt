@@ -119,6 +119,18 @@ class QueueResolverTest {
     }
 
     @Test
+    fun `a genre plays its songs shuffled or in album order`() {
+        val thrash = snapshot.genreNames.indexOf("Thrash Metal")
+        val shuffled = resolver.genre(thrash, shuffle = true)
+        assertEquals(QueueSource.Genre(thrash), shuffled.source)
+        assertEquals(snapshot.genreTracks(thrash).toSet(), shuffled.tracks.toSet())
+        val one = library.track("One")
+        val ordered = resolver.genre(thrash, shuffle = false, startTrack = one)
+        assertArrayEquals(snapshot.genreTracks(thrash), ordered.tracks)
+        assertEquals(one, ordered.tracks[ordered.startIndex])
+    }
+
+    @Test
     fun `nothing similar is no match`() {
         assertEquals(Resolution.NoMatch("zzzz qqqq"), resolve(RequestKind.ANY, "zzzz qqqq"))
     }

@@ -12,6 +12,7 @@ import kotlin.random.Random
 sealed interface QueueSource {
     data class Album(val album: Int) : QueueSource
     data class Artist(val artist: Int) : QueueSource
+    data class Genre(val genre: Int) : QueueSource
     /** The Songs list, ordered by title. */
     data object Songs : QueueSource
     /** The whole library, shuffled. */
@@ -71,6 +72,15 @@ class QueueResolver(private val library: LoadedLibrary, private val random: Rand
         val start = tracks.indexOf(startTrack).coerceAtLeast(0)
         val order = if (shuffle) "shuffled" else "in album order"
         return Resolution.Queue(tracks, start, QueueSource.Artist(artist), "all songs by ${artistName(artist)}, $order")
+    }
+
+    /** Every track in [genre]: shuffled, or in album order from [startTrack]. */
+    fun genre(genre: Int, shuffle: Boolean, startTrack: Int = -1): Resolution.Queue {
+        val tracks = snapshot.genreTracks(genre)
+        if (shuffle) tracks.shuffleWith(random)
+        val start = tracks.indexOf(startTrack).coerceAtLeast(0)
+        val order = if (shuffle) "shuffled" else "in album order"
+        return Resolution.Queue(tracks, start, QueueSource.Genre(genre), "genre ${snapshot.genreNames[genre]}, $order")
     }
 
     /** The Songs list from [startTrack]. */

@@ -57,6 +57,7 @@ internal class BrowseItems(private val context: Context) {
             is MediaId.SongSection -> s.trackLetters.sectionOf(id.label).takeIf { it >= 0 }?.let { songSection(s, it) }
             is MediaId.Album -> s.albumIndex(id.albumId).takeIf { it >= 0 }?.let { album(s, it) }
             is MediaId.Artist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { artist(s, it) }
+            is MediaId.Genre -> s.genreIndex(id.genreKey).takeIf { it >= 0 }?.let { genre(s, it) }
             is MediaId.Track -> s.trackIndex(id.trackId).takeIf { it >= 0 }?.let { track(s, it, id.context) }
         }
     }
@@ -114,6 +115,11 @@ internal class BrowseItems(private val context: Context) {
                     paged(tracks.size + 1, page, pageSize) { i -> if (i == 0) shuffleArtist(s, artist) else track(s, tracks[i - 1], context) }
                 }
             }
+            is MediaId.Genre -> {
+                val genre = s.genreIndex(parent.genreKey).takeIf { it >= 0 } ?: return null
+                val albums = s.genreAlbums(genre)
+                paged(albums.size, page, pageSize) { album(s, albums[it]) }
+            }
             MediaId.ShuffleAll, is MediaId.ShuffleArtist, is MediaId.Track -> null
         }
     }
@@ -123,6 +129,7 @@ internal class BrowseItems(private val context: Context) {
         val context = when (val source = queue.source) {
             is QueueSource.Album -> TrackContext.InAlbum(s.albumIds[source.album])
             is QueueSource.Artist -> TrackContext.InArtist(s.artistKeys[source.artist])
+            is QueueSource.Genre -> TrackContext.InGenre(s.genreKeys[source.genre])
             QueueSource.Songs -> TrackContext.InSongs
             QueueSource.Library -> TrackContext.None
         }
@@ -156,8 +163,7 @@ internal class BrowseItems(private val context: Context) {
             .setTitle(s.artistNames[r])
             .setArtist(s.artistNames[r])
             .setSubtitle(subtitle)
-            // The newest album's cover stands in for the artist.
-            .setArtworkUri(albums.lastOrNull()?.let { ArtworkProvider.albumUri(s.albumIds[it]) })
+            .setArtworkUri(ArtworkProvider.albumUri(s.albumIds[s.artistCoverAlbum(r)]))
             .setIsBrowsable(true)
             .setIsPlayable(true)
             .setMediaType(MediaMetadata.MEDIA_TYPE_ARTIST)
@@ -191,6 +197,20 @@ internal class BrowseItems(private val context: Context) {
             .setUri(ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, s.trackIds[t]))
             .setMediaMetadata(metadata)
             .build()
+    }
+
+    /** A genre: browsing lists its albums, playing shuffles its songs. Not in the root tabs. */
+    fun genre(s: LibrarySnapshot, g: Int): MediaItem {
+        val metadata = MediaMetadata.Builder()
+            .setTitle(s.genreNames[g])
+            .setGenre(s.genreNames[g])
+            .setSubtitle(count(R.plurals.browse_song_count, s.genreTrackCount(g)))
+            .setIsBrowsable(true)
+            .setIsPlayable(true)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_GENRE)
+            .setExtras(extras(browsable = MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM))
+            .build()
+        return MediaItem.Builder().setMediaId(MediaIds.encode(MediaId.Genre(s.genreKeys[g]))).setMediaMetadata(metadata).build()
     }
 
     private fun albumSection(s: LibrarySnapshot, section: Int): MediaItem = folder(
@@ -292,6 +312,7 @@ internal class BrowseItems(private val context: Context) {
             is TrackContext.InAlbum ->
                 s?.albumIndex(c.albumId)?.takeIf { it >= 0 }?.let { s.albumTitles[it] } ?: first.mediaMetadata.albumTitle?.toString()
             is TrackContext.InArtist -> s?.artistIndex(c.artistKey)?.takeIf { it >= 0 }?.let { s.artistNames[it] }
+            is TrackContext.InGenre -> s?.genreIndex(c.genreKey)?.takeIf { it >= 0 }?.let { s.genreNames[it] }
             TrackContext.InSongs -> songsTitle
             TrackContext.None -> shuffleAllTitle
         }

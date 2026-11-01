@@ -14,38 +14,43 @@ object TestLibrary {
         val year: Int,
         val tracks: List<Pair<String, String?>>,
         val compilation: Boolean = false,
+        val genre: String = "",
     )
 
     private val albums = listOf(
         AlbumSpec(1, "Kill 'Em All", "Metallica", "Metallica", 1983,
-            listOf("Hit the Lights" to null, "The Four Horsemen" to null, "Motorbreath" to null, "Seek & Destroy" to null)),
+            listOf("Hit the Lights" to null, "The Four Horsemen" to null, "Motorbreath" to null, "Seek & Destroy" to null),
+            genre = "Thrash Metal"),
         AlbumSpec(2, "Ride the Lightning", "Metallica", "", 1984,
-            listOf("Fight Fire with Fire" to null, "Ride the Lightning" to null, "For Whom the Bell Tolls" to null, "Fade to Black" to null)),
+            listOf("Fight Fire with Fire" to null, "Ride the Lightning" to null, "For Whom the Bell Tolls" to null, "Fade to Black" to null),
+            genre = "Thrash Metal"),
         AlbumSpec(3, "Master of Puppets (Remastered)", "Metallica", "Metallica", 1986,
-            listOf("Battery" to null, "Master of Puppets" to null, "The Thing That Should Not Be" to null)),
+            // Genres differing only in case are one genre.
+            listOf("Battery" to null, "Master of Puppets" to null, "The Thing That Should Not Be" to null), genre = "thrash metal"),
         AlbumSpec(4, "...And Justice for All", "Metallica", "Metallica", 1988,
-            listOf("Blackened" to null, "...And Justice for All" to null, "Eye of the Beholder" to null, "One" to null)),
+            listOf("Blackened" to null, "...And Justice for All" to null, "Eye of the Beholder" to null, "One" to null),
+            genre = "Thrash Metal"),
         AlbumSpec(5, "Metallica", "Metallica", "Metallica", 1991,
-            listOf("Enter Sandman" to null, "Sad but True" to null, "Nothing Else Matters" to null)),
+            listOf("Enter Sandman" to null, "Sad but True" to null, "Nothing Else Matters" to null), genre = "Heavy Metal"),
         AlbumSpec(6, "Don't Play That Song!", "Ben E. King", "", 1962,
-            listOf("Stand by Me" to null, "Don't Play That Song (You Lied)" to null)),
+            listOf("Stand by Me" to null, "Don't Play That Song (You Lied)" to null), genre = "Soul"),
         AlbumSpec(7, "Ace of Spades", "Motörhead", "Motörhead", 1980,
-            listOf("Ace of Spades" to null, "Love Me Like a Reptile" to null)),
+            listOf("Ace of Spades" to null, "Love Me Like a Reptile" to null), genre = "Heavy Metal"),
         AlbumSpec(8, "Now That's What I Call Music", "", "", 2001,
             listOf("Song A" to "Artist A", "Song B" to "Artist B"), compilation = true),
         // A one-word title that a long, garbled query contains ("and just for all my intelligents").
         AlbumSpec(9, "The Bends", "Radiohead", "Radiohead", 1995,
             listOf("Planet Telex" to null, "The Bends" to null, "High and Dry" to null, "Fake Plastic Trees" to null,
-                "Bones" to null, "Nice Dream" to null, "Just" to null)),
+                "Bones" to null, "Nice Dream" to null, "Just" to null), genre = "Alternative"),
         // A second song with the same name as the studio album.
         AlbumSpec(10, "Live in Seoul", "Metallica", "Metallica", 2017,
             listOf("Creeping Death" to null, "And Justice For All" to null)),
         // Two albums with one title, told apart only by the artist; and an artist name ("Queen")
         // that ends another artist's song title ("Dancing Queen").
         AlbumSpec(11, "Greatest Hits", "Queen", "Queen", 1981,
-            listOf("Bohemian Rhapsody" to null, "Another One Bites the Dust" to null)),
+            listOf("Bohemian Rhapsody" to null, "Another One Bites the Dust" to null), genre = "Rock"),
         AlbumSpec(12, "Greatest Hits", "ABBA", "ABBA", 1975,
-            listOf("Dancing Queen" to null, "Waterloo" to null)),
+            listOf("Dancing Queen" to null, "Waterloo" to null), genre = "Pop"),
     )
 
     fun rows(): List<RawTrack> = albums.flatMap { album ->
@@ -64,6 +69,7 @@ object TestLibrary {
                 isCompilation = album.compilation,
                 // Later fixtures count as added later, for Recently added.
                 dateAddedSec = album.id * 1_000L,
+                genre = album.genre,
             )
         }
     }.reversed() // MediaStore order is arbitrary; the builder must not depend on it.

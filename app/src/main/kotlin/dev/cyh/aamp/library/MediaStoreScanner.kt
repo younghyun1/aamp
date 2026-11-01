@@ -35,7 +35,7 @@ data class MediaStoreSignature(val version: String, val generations: Map<String,
 object MediaStoreScanner {
     private val projection = arrayOf(
         Media._ID, Media.TITLE, Media.ARTIST, Media.ALBUM, Media.ALBUM_ID, Media.ALBUM_ARTIST,
-        Media.TRACK, Media.DISC_NUMBER, Media.YEAR, Media.DURATION, Media.COMPILATION, Media.DATE_ADDED,
+        Media.TRACK, Media.DISC_NUMBER, Media.YEAR, Media.DURATION, Media.COMPILATION, Media.DATE_ADDED, Media.GENRE,
     )
 
     fun scan(resolver: ContentResolver): ScanResult {
@@ -69,6 +69,7 @@ object MediaStoreScanner {
         val duration = c.getColumnIndexOrThrow(Media.DURATION)
         val compilation = c.getColumnIndexOrThrow(Media.COMPILATION)
         val dateAdded = c.getColumnIndexOrThrow(Media.DATE_ADDED)
+        val genre = c.getColumnIndexOrThrow(Media.GENRE)
 
         val rows = ArrayList<RawTrack>(c.count)
         while (c.moveToNext()) {
@@ -88,6 +89,7 @@ object MediaStoreScanner {
                 durationMs = c.getLong(duration),
                 isCompilation = c.getString(compilation) == "1",
                 dateAddedSec = c.getLong(dateAdded),
+                genre = c.text(genre),
             )
         }
         return ScanResult.Success(rows)

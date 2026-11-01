@@ -18,4 +18,5 @@ class RawTrack(
     val isCompilation: Boolean,
     /** When MediaStore first indexed the file, in seconds since the epoch. */
     val dateAddedSec: Long,
+    val genre: String = "",
 )
