@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaLibraryService
@@ -57,6 +58,10 @@ class PlaybackService : MediaLibraryService() {
 
             override fun onRepeatModeChanged(repeatMode: Int) {
                 built.setMediaButtonPreferences(controlButtons(player))
+            }
+
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) callback.updateQueueTitle(player)
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {

@@ -8,6 +8,7 @@
     <string name="browse_songs">Songs</string>
     <string name="browse_recent">Recently added</string>
     <string name="browse_shuffle_all">Shuffle all</string>
+    <string name="browse_shuffle_artist">Shuffle %1$s</string>
     <plurals name="browse_album_count">
         <item quantity="one">%1$d album</item>
         <item quantity="other">%1$d albums</item>

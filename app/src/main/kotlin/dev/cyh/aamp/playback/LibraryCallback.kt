@@ -6,6 +6,8 @@ import android.provider.MediaStore
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService.LibraryParams
@@ -279,6 +281,7 @@ internal class LibraryCallback(
             }
             is MediaId.Album -> s.albumIndex(id.albumId).takeIf { it >= 0 }?.let { resolver.album(it) }
             is MediaId.Artist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { resolver.artist(it, shuffle = true) }
+            is MediaId.ShuffleArtist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { resolver.artist(it, shuffle = true) }
             MediaId.ShuffleAll -> resolver.shuffleAll()
             MediaId.Root, MediaId.Albums, MediaId.Artists, MediaId.Recent, MediaId.Songs,
             is MediaId.AlbumSection, is MediaId.ArtistSection, is MediaId.SongSection -> null
@@ -298,6 +301,15 @@ internal class LibraryCallback(
             }
             else -> null
         } ?: if (item.localConfiguration != null) listOf(item) else emptyList()
+    }
+
+    /** Names the queue after the list it was built from; Android Auto shows it above the queue. */
+    fun updateQueueTitle(player: Player) {
+        val first = if (player.mediaItemCount > 0) player.getMediaItemAt(0) else null
+        val loaded = (library.state.value as? LibraryState.Ready)?.library
+        val title = first?.let { items.queueTitle(loaded?.snapshot, it) }
+        if (player.playlistMetadata.title?.toString() == title) return
+        player.playlistMetadata = MediaMetadata.Builder().setTitle(title).build()
     }
 
     /** Search results for Android Auto, grouped as albums, artists, then songs. */

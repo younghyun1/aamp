@@ -25,6 +25,9 @@ import dev.cyh.aamp.voice.Resolution
  * all" item, then every song by title). Albums, Artists and Songs are split into alphabetical
  * sections once they hold more than [SECTION_THRESHOLD] entries, because Android Auto neither
  * pages nor lets a driver scroll far. Albums and artists are both browsable and playable.
+ *
+ * In the playback view, a track's artist (subtitle) links to that artist's albums and its album
+ * (description) links to the album's tracks.
  */
 @OptIn(UnstableApi::class) // Android Auto content style keys
 internal class BrowseItems(private val context: Context) {
@@ -48,6 +51,7 @@ internal class BrowseItems(private val context: Context) {
             MediaId.Albums, MediaId.Artists, MediaId.Recent, MediaId.Songs ->
                 rootChildren(s).firstOrNull { it.mediaId == MediaIds.encode(id) }
             MediaId.ShuffleAll -> shuffleAll()
+            is MediaId.ShuffleArtist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { shuffleArtist(s, it) }
             is MediaId.AlbumSection -> s.albumLetters.sectionOf(id.label).takeIf { it >= 0 }?.let { albumSection(s, it) }
             is MediaId.ArtistSection -> s.artistLetters.sectionOf(id.label).takeIf { it >= 0 }?.let { artistSection(s, it) }
             is MediaId.SongSection -> s.trackLetters.sectionOf(id.label).takeIf { it >= 0 }?.let { songSection(s, it) }
@@ -97,12 +101,20 @@ internal class BrowseItems(private val context: Context) {
                 val tracks = s.albumTracks(album)
                 paged(tracks.size, page, pageSize) { track(s, tracks[it], TrackContext.InAlbum(parent.albumId)) }
             }
+            // A shuffle item first, since a browsed-into artist offers no other way to play it; then
+            // the albums, or for artists who only appear on compilations, their songs.
             is MediaId.Artist -> {
                 val artist = s.artistIndex(parent.artistKey).takeIf { it >= 0 } ?: return null
                 val albums = s.artistAlbums(artist)
-                paged(albums.size, page, pageSize) { album(s, albums[it]) }
+                if (albums.isNotEmpty()) {
+                    paged(albums.size + 1, page, pageSize) { i -> if (i == 0) shuffleArtist(s, artist) else album(s, albums[i - 1]) }
+                } else {
+                    val tracks = s.artistTracks(artist)
+                    val context = TrackContext.InArtist(parent.artistKey)
+                    paged(tracks.size + 1, page, pageSize) { i -> if (i == 0) shuffleArtist(s, artist) else track(s, tracks[i - 1], context) }
+                }
             }
-            MediaId.ShuffleAll, is MediaId.Track -> null
+            MediaId.ShuffleAll, is MediaId.ShuffleArtist, is MediaId.Track -> null
         }
     }
 
@@ -138,10 +150,12 @@ internal class BrowseItems(private val context: Context) {
 
     fun artist(s: LibrarySnapshot, r: Int, group: String? = null): MediaItem {
         val albums = s.artistAlbums(r)
+        val subtitle = if (albums.isNotEmpty()) count(R.plurals.browse_album_count, albums.size)
+        else count(R.plurals.browse_song_count, s.artistTrackCount(r))
         val metadata = MediaMetadata.Builder()
             .setTitle(s.artistNames[r])
             .setArtist(s.artistNames[r])
-            .setSubtitle(count(R.plurals.browse_album_count, albums.size))
+            .setSubtitle(subtitle)
             // The newest album's cover stands in for the artist.
             .setArtworkUri(albums.lastOrNull()?.let { ArtworkProvider.albumUri(s.albumIds[it]) })
             .setIsBrowsable(true)
@@ -159,6 +173,7 @@ internal class BrowseItems(private val context: Context) {
             .setTitle(s.trackTitles[t])
             .setArtist(artist)
             .setSubtitle(artist)
+            .setDescription(s.albumTitles[album])
             .setAlbumTitle(s.albumTitles[album])
             .setAlbumArtist(s.artistNames[s.albumArtist[album]])
             .setTrackNumber(s.trackNumber[t].takeIf { it > 0 })
@@ -169,7 +184,7 @@ internal class BrowseItems(private val context: Context) {
             .setIsBrowsable(false)
             .setIsPlayable(true)
             .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
-            .setExtras(extras(group = group))
+            .setExtras(trackExtras(s, t, group))
             .build()
         return MediaItem.Builder()
             .setMediaId(MediaIds.encode(MediaId.Track(s.trackIds[t], context)))
@@ -201,6 +216,16 @@ internal class BrowseItems(private val context: Context) {
         MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
         extras(playable = MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_LIST_ITEM),
     )
+
+    private fun shuffleArtist(s: LibrarySnapshot, r: Int): MediaItem {
+        val metadata = MediaMetadata.Builder()
+            .setTitle(context.getString(R.string.browse_shuffle_artist, s.artistNames[r]))
+            .setIsBrowsable(false)
+            .setIsPlayable(true)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_PLAYLIST)
+            .build()
+        return MediaItem.Builder().setMediaId(MediaIds.encode(MediaId.ShuffleArtist(s.artistKeys[r]))).setMediaMetadata(metadata).build()
+    }
 
     private fun shuffleAll(): MediaItem {
         val metadata = MediaMetadata.Builder()
@@ -250,6 +275,28 @@ internal class BrowseItems(private val context: Context) {
         }
     }
 
+    /**
+     * A track's search group plus the playback view links: the subtitle (artist) opens the artist,
+     * the description (album) opens the album. Android Auto resolves the ids through onGetItem.
+     */
+    private fun trackExtras(s: LibrarySnapshot, t: Int, group: String?): Bundle = Bundle(3).apply {
+        group?.let { putString(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE, it) }
+        putString(KEY_SUBTITLE_LINK_MEDIA_ID, MediaIds.encode(MediaId.Artist(s.artistKeys[s.trackArtist[t]])))
+        putString(KEY_DESCRIPTION_LINK_MEDIA_ID, MediaIds.encode(MediaId.Album(s.albumIds[s.trackAlbum[t]])))
+    }
+
+    /** The name Android Auto's queue view shows for a queue whose first item is [first]. */
+    fun queueTitle(s: LibrarySnapshot?, first: MediaItem): String? {
+        val id = MediaIds.parse(first.mediaId) as? MediaId.Track ?: return null
+        return when (val c = id.context) {
+            is TrackContext.InAlbum ->
+                s?.albumIndex(c.albumId)?.takeIf { it >= 0 }?.let { s.albumTitles[it] } ?: first.mediaMetadata.albumTitle?.toString()
+            is TrackContext.InArtist -> s?.artistIndex(c.artistKey)?.takeIf { it >= 0 }?.let { s.artistNames[it] }
+            TrackContext.InSongs -> songsTitle
+            TrackContext.None -> shuffleAllTitle
+        }
+    }
+
     private fun sectionMembers(index: LetterIndex, label: String): IntArray? =
         index.sectionOf(label).takeIf { it >= 0 }?.let(index::members)
 
@@ -270,5 +317,10 @@ internal class BrowseItems(private val context: Context) {
 
         /** How many albums Recently added shows. */
         const val RECENT_LIMIT = 60
+
+        // androidx.car.app.mediaextensions.MetadataExtras keys, copied rather than depending on the
+        // car app library for two strings.
+        const val KEY_SUBTITLE_LINK_MEDIA_ID = "androidx.car.app.mediaextensions.KEY_SUBTITLE_LINK_MEDIA_ID"
+        const val KEY_DESCRIPTION_LINK_MEDIA_ID = "androidx.car.app.mediaextensions.KEY_DESCRIPTION_LINK_MEDIA_ID"
     }
 }

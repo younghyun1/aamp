@@ -15,6 +15,8 @@ sealed interface MediaId {
     data object Recent : MediaId
     data object Songs : MediaId
     data object ShuffleAll : MediaId
+    /** Every track by an artist, shuffled: the first child of an artist, which Android Auto cannot play from inside. */
+    data class ShuffleArtist(val artistKey: Long) : MediaId
     data class AlbumSection(val label: String) : MediaId
     data class ArtistSection(val label: String) : MediaId
     data class SongSection(val label: String) : MediaId
@@ -37,6 +39,7 @@ object MediaIds {
     private const val RECENT = "recent"
     private const val SONGS = "songs"
     private const val SHUFFLE_ALL = "shuffle:all"
+    private const val SHUFFLE_ARTIST = "shuffle:artist:"
     private const val ALBUM_SECTION = "albums:"
     private const val ARTIST_SECTION = "artists:"
     private const val SONG_SECTION = "songs:"
@@ -51,6 +54,7 @@ object MediaIds {
         MediaId.Recent -> RECENT
         MediaId.Songs -> SONGS
         MediaId.ShuffleAll -> SHUFFLE_ALL
+        is MediaId.ShuffleArtist -> SHUFFLE_ARTIST + id.artistKey
         is MediaId.AlbumSection -> ALBUM_SECTION + id.label
         is MediaId.ArtistSection -> ARTIST_SECTION + id.label
         is MediaId.SongSection -> SONG_SECTION + id.label
@@ -72,6 +76,7 @@ object MediaIds {
         raw == RECENT -> MediaId.Recent
         raw == SONGS -> MediaId.Songs
         raw == SHUFFLE_ALL -> MediaId.ShuffleAll
+        raw.startsWith(SHUFFLE_ARTIST) -> raw.removePrefix(SHUFFLE_ARTIST).toLongOrNull()?.let(MediaId::ShuffleArtist)
         raw.startsWith(ALBUM_SECTION) -> raw.removePrefix(ALBUM_SECTION).ifEmpty { null }?.let(MediaId::AlbumSection)
         raw.startsWith(ARTIST_SECTION) -> raw.removePrefix(ARTIST_SECTION).ifEmpty { null }?.let(MediaId::ArtistSection)
         raw.startsWith(SONG_SECTION) -> raw.removePrefix(SONG_SECTION).ifEmpty { null }?.let(MediaId::SongSection)

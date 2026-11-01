@@ -66,6 +66,8 @@ class LibrarySnapshot internal constructor(
 
     fun artistAlbumCount(artist: Int): Int = artistAlbumOffsets[artist + 1] - artistAlbumOffsets[artist]
 
+    fun artistTrackCount(artist: Int): Int = artistTrackOffsets[artist + 1] - artistTrackOffsets[artist]
+
     /** Index of the track with MediaStore id [trackId], or -1. */
     fun trackIndex(trackId: Long): Int = trackById[trackId]
 
