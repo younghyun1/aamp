@@ -48,7 +48,7 @@ internal fun AlbumGrid(
     WithLetterRail(sections, scrollTo = { gridState.scrollToItem(it) }) { rail ->
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val usable = maxWidth - PADDING * 2 - rail
-            val columns = ((usable + SPACING) / (MIN_CELL + SPACING)).toInt().coerceAtLeast(1)
+            val columns = ((usable + SPACING) / (MIN_CELL + SPACING)).toInt().coerceAtLeast(MIN_COLUMNS)
             val cellPx = with(LocalDensity.current) { ((usable - SPACING * (columns - 1)) / columns).roundToPx() }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
@@ -94,5 +94,8 @@ private fun AlbumTile(snapshot: LibrarySnapshot, album: Int, covers: CoverLoader
 private val PADDING = 16.dp
 private val SPACING = 12.dp
 private val MIN_CELL = 104.dp
+
+/** Three covers across even on a narrow phone; wider screens fit more. */
+private const val MIN_COLUMNS = 3
 private const val HEADER_KEY = "header"
 private const val ALBUM_TYPE = 0
