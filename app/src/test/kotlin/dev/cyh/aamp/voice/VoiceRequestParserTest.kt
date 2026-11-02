@@ -5,7 +5,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class VoiceRequestParserTest {
-    private fun parse(text: String) = VoiceRequestParser.parse(VoiceQuery(text))
+    /** The parse without [Search.whole], which most tests do not care about. */
+    private fun parse(text: String) = VoiceRequestParser.parse(VoiceQuery(text)).let { if (it is Search) it.copy(whole = null) else it }
 
     @Test
     fun `album marker before the name`() {
@@ -46,6 +47,32 @@ class VoiceRequestParserTest {
         assertEquals(Search(RequestKind.ARTIST, "metallica", null, true), parse("play songs from Metallica"))
         assertEquals(Search(RequestKind.ARTIST, "metallica", null, true), parse("play something from Metallica"))
         assertEquals(Search(RequestKind.ALBUM, "ride the lightning", null, false), parse("play songs from the album Ride the Lightning"))
+    }
+
+    @Test
+    fun `artist kind words before or after the name`() {
+        for (text in listOf(
+            "play the artist Adele", "play artist Adele", "play the singer Adele", "play singer Adele",
+            "play Adele the singer", "play Adele the artist", "play songs by the singer Adele",
+        )) {
+            assertEquals(text, Search(RequestKind.ARTIST, "adele", null, true), parse(text))
+        }
+        for (text in listOf("play the band Metallica", "play Metallica the band", "play songs by the band Metallica", "play Metallica band")) {
+            assertEquals(text, Search(RequestKind.ARTIST, "metallica", null, true), parse(text))
+        }
+        for (text in listOf("play the group ABBA", "play ABBA the group", "play group ABBA", "shuffle music from the group ABBA")) {
+            assertEquals(text, Search(RequestKind.ARTIST, "abba", null, true), parse(text))
+        }
+    }
+
+    @Test
+    fun `a kind word alone is a name, and the phrase as said is kept`() {
+        assertEquals(Search(RequestKind.ANY, "the band", null, false), parse("play The Band"))
+        assertEquals(
+            Search(RequestKind.ARTIST, "on the run", null, true, whole = "band on the run"),
+            VoiceRequestParser.parse(VoiceQuery("play Band on the Run")),
+        )
+        assertEquals(null, (VoiceRequestParser.parse(VoiceQuery("play Metallica")) as Search).whole)
     }
 
     @Test

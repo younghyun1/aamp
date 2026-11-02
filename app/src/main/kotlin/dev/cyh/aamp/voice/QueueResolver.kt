@@ -120,23 +120,38 @@ class QueueResolver(
             RequestKind.ALBUM ->
                 bestAlbum(readings)?.let { album(it.index).scored(it) }
                     ?: bestTrack(readings)?.let { album(snapshot.trackAlbum[it.index]).scored(it) }
+                    ?: asSaid(request)
                     ?: Resolution.NoMatch(request.phrase)
             RequestKind.SONG ->
                 bestTrack(readings)?.let { song(it.index, request.shuffle).scored(it) }
                     ?: bestAlbum(readings)?.let { album(it.index).scored(it) }
+                    ?: asSaid(request)
                     ?: Resolution.NoMatch(request.phrase)
             RequestKind.ARTIST ->
                 bestName(nameKeys(request.phrase), search.artists)?.let { artist(it.index, shuffle = true).scored(it) }
+                    ?: asSaid(request)
                     ?: resolveAny(request, readings)
             RequestKind.GENRE ->
                 bestName(nameKeys(request.phrase), search.genres)?.let { genre(it.index, shuffle = true).scored(it) }
+                    ?: asSaid(request)
                     ?: resolveAny(request, readings)
             RequestKind.PLAYLIST ->
                 bestName(nameKeys(request.phrase), playlistIndex)
                     ?.let { hit -> playlist(playlists[hit.index], request.shuffle)?.scored(hit) }
+                    ?: asSaid(request)
                     ?: resolveAny(request, readings)
             RequestKind.ANY -> resolveAny(request, readings)
         }
+    }
+
+    /**
+     * A request whose kind word found nothing, read again as said with no kind: "play band on the
+     * run" names no artist "on the run", so it is the album Band on the Run. Null when the parser
+     * took no word out.
+     */
+    private fun asSaid(request: PlayRequest.Search): Resolution? {
+        val whole = request.whole ?: return null
+        return resolveSearch(PlayRequest.Search(RequestKind.ANY, whole, request.artist, request.shuffle, request.album))
     }
 
     private fun resolveAny(request: PlayRequest.Search, readings: List<Reading>): Resolution {
@@ -238,7 +253,7 @@ class QueueResolver(
             val title = words.subList(0, i)
             val rest = words.subList(i + 1, n)
             if (words[i] in Phrases.artistSeparators) {
-                val artist = Phrases.withoutFiller(rest, Phrases.artistFillers)
+                val artist = Phrases.withoutFiller(rest, Phrases.artistKinds)
                 byArtist(title, artist, ARTIST_SPLIT_MIN, weight = 1f, explicit = true)?.let(readings::add)
             }
             if (albumSplits && words[i] in Phrases.albumSeparators) readings += onAlbum(title, rest)

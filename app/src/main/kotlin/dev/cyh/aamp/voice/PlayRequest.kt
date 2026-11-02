@@ -27,6 +27,10 @@ sealed interface PlayRequest {
      * Find and play [phrase]. Without a separate [artist] hint the phrase may still name an artist
      * or album ("X by Y", "Y's X", "X from Y"), which the resolver splits off only when the library
      * has a matching artist or album. [album] is a structured hint naming the album a song is on.
+     *
+     * [whole] is the request as said, kind word included, when the parser took one out: "play band
+     * on the run" is first an artist request for "on the run", and when no artist matches, a
+     * request for "band on the run" of any kind.
      */
     data class Search(
         val kind: RequestKind,
@@ -34,5 +38,6 @@ sealed interface PlayRequest {
         val artist: String?,
         val shuffle: Boolean,
         val album: String? = null,
+        val whole: String? = null,
     ) : PlayRequest
 }

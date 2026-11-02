@@ -54,7 +54,7 @@ class LetterIndexTest {
         val a = s.albumLetters.members(s.albumLetters.sectionOf("A")).map { s.albumTitles[it] }
         assertEquals(listOf("Ace of Spades", "...And Justice for All"), a)
         assertEquals(s.trackCount, (0 until s.trackLetters.size).sumOf { s.trackLetters.members(it).size })
-        assertEquals(library.album("Greatest Hits", "ABBA"), s.albumsByRecent.first())
+        assertEquals(library.album("Band on the Run"), s.albumsByRecent.first())
         assertEquals(library.album("Kill 'Em All"), s.albumsByRecent.last())
     }
 }

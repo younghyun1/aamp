@@ -51,6 +51,11 @@ object TestLibrary {
             listOf("Bohemian Rhapsody" to null, "Another One Bites the Dust" to null), genre = "Rock"),
         AlbumSpec(12, "Greatest Hits", "ABBA", "ABBA", 1975,
             listOf("Dancing Queen" to null, "Waterloo" to null), genre = "Pop"),
+        // An artist named like a kind word, and a title that starts with one.
+        AlbumSpec(13, "Music from Big Pink", "The Band", "The Band", 1968,
+            listOf("The Weight" to null, "Chest Fever" to null)),
+        AlbumSpec(14, "Band on the Run", "Wings", "Wings", 1973,
+            listOf("Band on the Run" to null, "Jet" to null)),
     )
 
     fun rows(): List<RawTrack> = albums.flatMap { album ->

@@ -8,7 +8,7 @@ import dev.cyh.aamp.search.TextNormalizer
  * Structured hints win when they name something: a focus of album with an album name is an album
  * request, whatever the text says. Otherwise the text is read for "album", "song", "songs by",
  * "genre", "playlist" and similar markers, before, after or inside the name ("Metallica's album
- * Kill 'Em All", "my road trip playlist"); anything
+ * Kill 'Em All", "my road trip playlist", "the singer Adele", "Metallica the band"); anything
  * unmarked is [RequestKind.ANY] and the resolver decides. Splitting the rest into title, artist and
  * album is the resolver's job, because only the library can tell "Stand by Me" from "X by Y".
  */
@@ -39,12 +39,12 @@ object VoiceRequestParser {
     private val playlistPrefixes = listOf(listOf("the", "playlist"), listOf("playlist"), listOf("my", "playlist"))
     private val genrePrefixes = listOf(listOf("the", "genre"), listOf("genre"))
     private val songPrefixes = listOf(listOf("the", "song"), listOf("song"), listOf("the", "track"), listOf("track"))
+    // Followed by an artist, possibly with a kind word: "songs by the band Metallica".
     private val artistPrefixes = listOf(
         listOf("songs", "by"), listOf("music", "by"), listOf("tracks", "by"), listOf("stuff", "by"),
         listOf("everything", "by"), listOf("anything", "by"), listOf("something", "by"),
         listOf("songs", "from"), listOf("music", "from"), listOf("tracks", "from"), listOf("stuff", "from"),
         listOf("everything", "from"), listOf("anything", "from"), listOf("something", "from"),
-        listOf("the", "artist"), listOf("artist"), listOf("the", "band"), listOf("band"),
     )
 
     fun parse(query: VoiceQuery): PlayRequest {
@@ -58,6 +58,8 @@ object VoiceRequestParser {
 
         if (words.isEmpty() || words in everything) return if (shuffle) PlayRequest.ShuffleAll else PlayRequest.Resume
         if (words.first() == "some" && words.size > 1) words.removeAt(0)
+        val said = words.joinToString(" ")
+        fun search(kind: RequestKind, words: List<String>, shuffle: Boolean) = search(kind, words, shuffle, said)
 
         val request = when {
             stripPrefix(words, playlistPrefixes) -> search(RequestKind.PLAYLIST, words, shuffle)
@@ -67,7 +69,9 @@ object VoiceRequestParser {
             stripPrefix(words, albumPrefixes) -> search(RequestKind.ALBUM, words, shuffle)
             words.size > 1 && words.last() == "album" -> search(RequestKind.ALBUM, words.dropLast(1), shuffle)
             stripPrefix(words, songPrefixes) -> search(RequestKind.SONG, words, shuffle)
-            stripPrefix(words, artistPrefixes) -> search(RequestKind.ARTIST, words, shuffle = true)
+            stripPrefix(words, artistPrefixes) -> search(RequestKind.ARTIST, Phrases.withoutFiller(words, Phrases.artistKinds), shuffle = true)
+            stripName(words, Phrases.artistKinds) -> search(RequestKind.ARTIST, words, shuffle = true)
+            stripNameSuffix(words, Phrases.artistKinds) -> search(RequestKind.ARTIST, words, shuffle = true)
             removeInfix(words, Phrases.albumWords) -> search(RequestKind.ALBUM, words, shuffle)
             removeInfix(words, Phrases.songWords) -> search(RequestKind.SONG, words, shuffle)
             else -> search(RequestKind.ANY, words, shuffle)
@@ -106,12 +110,42 @@ object VoiceRequestParser {
         }
     }
 
-    private fun search(kind: RequestKind, words: List<String>, shuffle: Boolean): PlayRequest =
-        if (words.isEmpty()) {
-            if (shuffle) PlayRequest.ShuffleAll else PlayRequest.Resume
-        } else {
-            PlayRequest.Search(kind, words.joinToString(" "), artist = null, shuffle = shuffle)
+    /** A search for [words], remembering what was [said] when a kind word was taken out. */
+    private fun search(kind: RequestKind, words: List<String>, shuffle: Boolean, said: String): PlayRequest {
+        if (words.isEmpty()) return if (shuffle) PlayRequest.ShuffleAll else PlayRequest.Resume
+        val phrase = words.joinToString(" ")
+        val whole = said.takeIf { kind != RequestKind.ANY && it != phrase }
+        return PlayRequest.Search(kind, phrase, artist = null, shuffle = shuffle, whole = whole)
+    }
+
+    /**
+     * Removes a leading kind word ("the singer") when a name follows it; returns whether it did.
+     * "The Band" alone stays a name.
+     */
+    private fun stripName(words: MutableList<String>, kinds: List<List<String>>): Boolean {
+        for (kind in kinds) {
+            if (words.size > kind.size && words.subList(0, kind.size) == kind) {
+                repeat(kind.size) { words.removeAt(0) }
+                return true
+            }
         }
+        return false
+    }
+
+    /**
+     * Removes a trailing kind word ("Metallica the band", "ABBA group") when a name stands before
+     * it; returns whether it did. A lone "the" is no name, so "the band" stays whole.
+     */
+    private fun stripNameSuffix(words: MutableList<String>, kinds: List<List<String>>): Boolean {
+        for (kind in kinds) {
+            val name = words.size - kind.size
+            if (name < 1 || words.subList(name, words.size) != kind) continue
+            if (name == 1 && words[0] == "the") continue
+            repeat(kind.size) { words.removeAt(words.size - 1) }
+            return true
+        }
+        return false
+    }
 
     /** Removes the first matching prefix from [words]; returns whether one matched. */
     private fun stripPrefix(words: MutableList<String>, prefixes: List<List<String>>): Boolean {

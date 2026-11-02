@@ -274,6 +274,20 @@ class QueueResolverTest {
     }
 
     @Test
+    fun `artist kind words, and names and titles that look like them`() {
+        fun play(text: String) = resolver.resolve(VoiceRequestParser.parse(VoiceQuery(text)))
+        val metallica = library.artist("Metallica")
+        for (text in listOf("play the band Metallica", "play Metallica the band", "play songs by the group Metallica")) {
+            assertEquals(text, QueueSource.Artist(metallica), queue(play(text)).source)
+        }
+        assertEquals(QueueSource.Artist(library.artist("Ben E. King")), queue(play("play the singer Ben E. King")).source)
+        assertEquals(QueueSource.Artist(library.artist("The Band")), queue(play("play The Band")).source)
+        // No artist "on the run": the request is read as said and finds the album.
+        assertAlbumFrom(play("play Band on the Run"), "Band on the Run", "Band on the Run")
+        assertAlbumFrom(play("play The Weight by The Band"), "Music from Big Pink", "The Weight")
+    }
+
+    @Test
     fun `parsed spoken requests resolve end to end`() {
         fun play(text: String) = resolver.resolve(VoiceRequestParser.parse(VoiceQuery(text)))
         assertAlbumFrom(play("play album And Justice For All by Metallica"), "...And Justice for All", "Blackened")

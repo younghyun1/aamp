@@ -14,10 +14,13 @@ internal object Phrases {
     /** Words that can introduce the album a song is on: "X from Y", "X off the album Y". */
     val albumSeparators = setOf("from", "off", "on")
 
-    /** Words between an artist separator and the name: "by the band Metallica". */
-    val artistFillers = listOf(
-        listOf("the", "band"), listOf("band"), listOf("the", "artist"), listOf("artist"),
-        listOf("the", "group"), listOf("group"), listOf("the", "singer"), listOf("singer"),
+    /**
+     * Words that say a name is an artist's, before or after it: "the band Metallica", "Adele the
+     * singer", "by the group ABBA". Longer forms first, so "the band" is removed whole.
+     */
+    val artistKinds = listOf(
+        listOf("the", "artist"), listOf("the", "singer"), listOf("the", "band"), listOf("the", "group"),
+        listOf("artist"), listOf("singer"), listOf("band"), listOf("group"),
     )
 
     /** Words between an album separator and the title: "from the album ...". */

@@ -16,9 +16,9 @@ class LibraryBuilderTest {
         assertEquals(
             listOf(
                 // "The Bends" sorts as "bends": a leading "the" is ignored. Equal titles sort by artist.
-                "Ace of Spades", "...And Justice for All", "The Bends", "Don't Play That Song!",
+                "Ace of Spades", "...And Justice for All", "Band on the Run", "The Bends", "Don't Play That Song!",
                 "Greatest Hits", "Greatest Hits", "Kill 'Em All",
-                "Live in Seoul", "Master of Puppets (Remastered)", "Metallica", "Now That's What I Call Music",
+                "Live in Seoul", "Master of Puppets (Remastered)", "Metallica", "Music from Big Pink", "Now That's What I Call Music",
                 "Ride the Lightning",
             ),
             snapshot.albumTitles.toList(),
