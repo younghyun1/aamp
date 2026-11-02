@@ -17,7 +17,7 @@ import org.junit.runner.RunWith
  *
  * - The Android Auto path: the playback service starting, the saved library loading, and voice
  *   requests being parsed and matched, driven the way Android Auto's are, through the session.
- * - The phone screen: start, the album grid scrolled, each tab, and an album page.
+ * - The phone screen: start, the album grid scrolled, each tab, an album page, and search.
  *
  * Needs music on the device. Run with `./gradlew :app:generateBaselineProfile`, naming the device
  * in ANDROID_SERIAL when more than one is connected.
@@ -48,10 +48,19 @@ class BaselineProfileGenerator {
         retrying { device.findObject(By.text("Albums"))?.click() }
         device.waitForIdle()
         // Open the first album, then come back.
-        retrying { device.findObject(By.scrollable(true))?.children?.firstOrNull()?.click() }
-        device.waitForIdle()
+        retrying { device.findObject(By.scrollable(true))?.findObject(By.clickable(true))?.click() }
+        device.wait(Until.hasObject(By.desc("Back")), TIMEOUT_MS)
         device.pressBack()
-        device.waitForIdle()
+        // Search: building the index, then typing, a word at a time.
+        device.wait(Until.hasObject(By.desc("Search")), TIMEOUT_MS)
+        retrying { device.findObject(By.desc("Search"))?.click() }
+        device.wait(Until.hasObject(By.clazz("android.widget.EditText")), TIMEOUT_MS)
+        for (text in listOf("m", "et", "al", "%sone")) {
+            device.executeShellCommand("input text $text")
+            Thread.sleep(SEARCH_SETTLE_MS)
+        }
+        device.pressBack()
+        device.pressBack()
     }
 
     private fun MacrobenchmarkScope.fling(direction: Direction) = retrying { device.findObject(By.scrollable(true))?.fling(direction) }
@@ -81,6 +90,7 @@ class BaselineProfileGenerator {
         const val TIMEOUT_MS = 5_000L
         const val VOICE_SETTLE_MS = 1_500L
         const val RETRIES = 3
+        const val SEARCH_SETTLE_MS = 400L
         val TABS = listOf("Artists", "Songs", "Genres", "Playlists")
 
         /** Requests that exercise each kind of resolution, whether or not the library has a match. */

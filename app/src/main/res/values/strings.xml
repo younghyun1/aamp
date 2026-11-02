@@ -55,13 +55,22 @@
     <string name="ui_genres">Genres</string>
     <string name="ui_no_genres">No genre tags found in your music.</string>
     <string name="ui_add_to_playlist">Add to playlist</string>
-    <string name="ui_added_to_playlist">Added to %1$s</string>
     <string name="ui_new_playlist">New playlist</string>
     <string name="ui_playlist_name">Playlist name</string>
     <string name="ui_playlist_empty">No songs yet. Long-press a song, or use Add to playlist on an album.</string>
     <string name="ui_remove_from_playlist">Remove from playlist</string>
     <string name="ui_delete_playlist">Delete the playlist \"%1$s\"?</string>
     <string name="ui_create">Create</string>
+    <string name="ui_create_named">Create \"%1$s\"</string>
+    <string name="ui_find_playlist">Find or name a playlist</string>
+    <string name="ui_done">Done</string>
+    <string name="ui_add_songs">Add songs</string>
+    <string name="ui_search">Search</string>
+    <string name="ui_search_hint">Songs, albums, artists, genres, playlists</string>
+    <string name="ui_search_preparing">Preparing search…</string>
+    <string name="ui_search_none">No matches</string>
+    <string name="ui_add_to_named">Add to %1$s</string>
+    <string name="ui_in_playlist">In the playlist</string>
     <string name="ui_cancel">Cancel</string>
     <string name="ui_delete">Delete</string>
 

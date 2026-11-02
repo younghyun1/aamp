@@ -1,6 +1,15 @@
 package dev.cyh.aamp.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.input.clearText
+import dev.cyh.aamp.search.TextNormalizer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -83,6 +92,7 @@ internal fun PlaylistScreen(
     playingTrackId: Long?,
     onRemove: (position: Int) -> Unit,
     onDelete: () -> Unit,
+    onAddSongs: () -> Unit,
 ) {
     val colors = LocalColors.current
     // Positions in the playlist of the songs still in the library, and those songs.
@@ -106,6 +116,7 @@ internal fun PlaylistScreen(
                             player?.playId(MediaId.Playlist(playlist.id))
                         })
                     }
+                    PillButton(stringResource(R.string.ui_add_songs), onClick = onAddSongs, filled = shown.isEmpty())
                     PillButton(stringResource(R.string.ui_delete), onClick = onDelete, filled = false)
                 }
             }
@@ -132,62 +143,112 @@ internal fun PlaylistScreen(
 }
 
 /**
- * Adds songs to a playlist: tap one, or name a new one. With no songs (from the Playlists tab's
- * "New playlist") it only makes the playlist.
+ * Puts songs in playlists, as Spotify's and Apple Music's pickers do: recently changed playlists
+ * first, a check on those that already have the songs, and a tap that adds them or, on a checked
+ * one, takes them out again. The panel stays open so several playlists can be ticked, until Done.
+ * One field filters the list and names a new playlist. With no songs (the Playlists tab's "New
+ * playlist") it only makes one.
  */
 @Composable
 internal fun AddToPlaylistPanel(
     playlists: List<Playlist>,
-    adding: Boolean,
-    onPick: (playlistId: Long) -> Unit,
+    songs: LongArray,
+    onToggle: (playlist: Playlist, contained: Boolean) -> Unit,
     onCreate: (name: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = LocalColors.current
-    val name = rememberTextFieldState()
-    val create = { if (name.text.isNotBlank()) onCreate(name.text.toString()) }
+    val field = rememberTextFieldState()
+    val text = field.text.toString().trim()
+    val adding = songs.isNotEmpty()
+    val shown = remember(playlists, text) {
+        val key = TextNormalizer.normalize(text)
+        playlists.sortedByDescending { it.updatedMillis }.filter { key.isEmpty() || TextNormalizer.normalize(it.name).contains(key) }
+    }
+    val canCreate = text.isNotEmpty() && playlists.none { it.name.equals(text, ignoreCase = true) }
+    val create = {
+        if (canCreate) {
+            onCreate(text)
+            field.clearText()
+        }
+    }
     Panel(onDismiss) {
         BasicText(
             stringResource(if (adding) R.string.ui_add_to_playlist else R.string.ui_new_playlist),
             style = colors.title,
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
         )
-        if (adding && playlists.isNotEmpty()) {
-            LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                items(playlists.size, key = { playlists[it].id }) { i ->
+        Box(
+            Modifier
+                .padding(horizontal = 16.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(colors.background)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            if (field.text.isEmpty()) {
+                BasicText(
+                    stringResource(if (adding) R.string.ui_find_playlist else R.string.ui_playlist_name),
+                    style = colors.body.copy(color = colors.muted),
+                )
+            }
+            BasicTextField(
+                state = field,
+                textStyle = colors.body,
+                cursorBrush = SolidColor(colors.accent),
+                lineLimits = TextFieldLineLimits.SingleLine,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
+                onKeyboardAction = { create() },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        LazyColumn(Modifier.heightIn(max = 360.dp).padding(top = 8.dp)) {
+            if (canCreate) {
+                item(key = NEW_KEY) {
                     BasicText(
-                        playlists[i].name,
-                        style = colors.body,
+                        stringResource(R.string.ui_create_named, text),
+                        style = colors.body.copy(color = colors.accent, fontWeight = FontWeight.Medium),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(role = Role.Button) { onPick(playlists[i].id) }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = create).padding(16.dp),
                     )
                 }
             }
-        }
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.background)
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-            ) {
-                if (name.text.isEmpty()) BasicText(stringResource(R.string.ui_playlist_name), style = colors.body.copy(color = colors.muted))
-                BasicTextField(
-                    state = name,
-                    textStyle = colors.body,
-                    cursorBrush = SolidColor(colors.accent),
-                    lineLimits = TextFieldLineLimits.SingleLine,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
-                    onKeyboardAction = { create() },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            if (adding) {
+                items(shown.size, key = { shown[it].id }) { i ->
+                    val playlist = shown[i]
+                    val contained = remember(playlist, songs) { playlist.containsAll(songs) }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(role = Role.Checkbox) { onToggle(playlist, contained) }
+                            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            BasicText(playlist.name, style = colors.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val count = playlist.trackIds.size
+                            BasicText(pluralStringResource(R.plurals.browse_song_count, count, count), style = colors.caption)
+                        }
+                        val description = stringResource(if (contained) R.string.ui_in_playlist else R.string.ui_add_to_playlist)
+                        Box(Modifier.size(48.dp).semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
+                            Image(
+                                painterResource(if (contained) R.drawable.ic_check else R.drawable.ic_playlist_add),
+                                contentDescription = null,
+                                colorFilter = ColorFilter.tint(if (contained) colors.accent else colors.muted),
+                                modifier = Modifier.size(24.dp),
+                            )
+                        }
+                    }
+                }
             }
-            PillButton(stringResource(R.string.ui_create), onClick = create, modifier = Modifier.padding(start = 8.dp))
+        }
+        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.End) {
+            if (adding) {
+                PillButton(stringResource(R.string.ui_done), onClick = onDismiss)
+            } else {
+                PillButton(stringResource(R.string.ui_create), onClick = { if (canCreate) onCreate(text) })
+            }
         }
     }
 }

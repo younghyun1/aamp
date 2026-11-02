@@ -3,7 +3,6 @@ package dev.cyh.aamp.ui
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,7 +44,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
@@ -77,6 +75,9 @@ internal sealed interface Screen {
     data class Album(val albumId: Long) : Screen
     data class Artist(val artistKey: Long) : Screen
     data class Genre(val genreKey: Long) : Screen
+
+    /** Search; with [addTo], adding songs and albums to that playlist. */
+    data class Search(val addTo: Long? = null) : Screen
     data class Playlist(val playlistId: Long) : Screen
 }
 
@@ -101,7 +102,8 @@ internal fun AampApp() {
     val app = context.aamp
     val colors = LocalColors.current
     val libraryState by app.library.state.collectAsStateWithLifecycle()
-    val snapshot = (libraryState as? LibraryState.Ready)?.library?.snapshot
+    val loaded = (libraryState as? LibraryState.Ready)?.library
+    val snapshot = loaded?.snapshot
     val controller = rememberPlaybackController()
     val covers = remember { CoverLoader(context.applicationContext) }
     LifecycleStartEffect(covers) { onStopOrDispose { covers.clear() } }
@@ -144,7 +146,10 @@ internal fun AampApp() {
     var adding by rememberSaveable { mutableStateOf<LongArray?>(null) }
     var deleting by rememberSaveable { mutableStateOf<Long?>(null) }
     val addToPlaylist: (LongArray) -> Unit = { adding = it }
-    val resources = LocalResources.current
+    // Ticking a playlist adds the songs it lacks; unticking one that has them all takes them out.
+    val togglePlaylist: (Playlist, LongArray, Boolean) -> Unit = { playlist, songs, contained ->
+        if (contained) songs.forEach { app.playlists.removeTrack(playlist.id, it) } else app.playlists.addMissing(playlist.id, songs)
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -157,6 +162,7 @@ internal fun AampApp() {
                 title = title(screen, snapshot, playlists),
                 canGoBack = stack.size > 1,
                 onBack = back,
+                onSearch = if (screen !is Screen.Search && screen != Screen.Settings && loaded != null) ({ open(Screen.Search()) }) else null,
                 onSettings = if (screen != Screen.Settings) ({ open(Screen.Settings) }) else null,
             )
             if (screen == Screen.Home) Tabs(tab, onSelect = { tab = it })
@@ -227,15 +233,31 @@ internal fun AampApp() {
                                     playingTrackId,
                                     onRemove = { app.playlists.removeAt(playlist.id, it) },
                                     onDelete = { deleting = playlist.id },
+                                    onAddSongs = { open(Screen.Search(addTo = playlist.id)) },
                                 )
                             } else {
                                 Message(stringResource(R.string.ui_not_found))
                             }
                         }
+                        is Screen.Search -> if (loaded != null) {
+                            SearchScreen(
+                                loaded,
+                                playlists,
+                                covers,
+                                controller,
+                                playingTrackId,
+                                addTo = screen.addTo?.let { id -> playlists.firstOrNull { it.id == id } },
+                                onOpen = open,
+                                onAddToPlaylist = addToPlaylist,
+                                onToggleIn = togglePlaylist,
+                            )
+                        } else {
+                            LibraryMessage(libraryState, requestAccess, rescan)
+                        }
                     }
                 }
             }
-            if (controller != null) NowPlayingBar(controller, snapshot, covers, openAlbum, openArtist)
+            if (controller != null) NowPlayingBar(controller, snapshot, covers, openAlbum, openArtist, addToPlaylist)
             // Behind the navigation bar, in the color of whatever is above it.
             Spacer(Modifier.fillMaxWidth().windowInsetsBottomHeight(WindowInsets.navigationBars).background(colors.surface))
         }
@@ -243,16 +265,13 @@ internal fun AampApp() {
         adding?.let { songs ->
             AddToPlaylistPanel(
                 playlists,
-                adding = songs.isNotEmpty(),
-                onPick = { id ->
-                    app.playlists.add(id, songs)
-                    playlists.firstOrNull { it.id == id }?.let { context.toast(resources.getString(R.string.ui_added_to_playlist, it.name)) }
-                    adding = null
-                },
+                songs,
+                onToggle = { playlist, contained -> togglePlaylist(playlist, songs, contained) },
                 onCreate = { name ->
                     app.playlists.create(name, songs)
-                    if (songs.isNotEmpty()) context.toast(resources.getString(R.string.ui_added_to_playlist, name.trim()))
-                    adding = null
+                    // A new playlist made from the Playlists tab is all there is to do; with songs,
+                    // the panel stays open with it ticked.
+                    if (songs.isEmpty()) adding = null
                 },
                 onDismiss = { adding = null },
             )
@@ -273,10 +292,8 @@ internal fun AampApp() {
     }
 }
 
-private fun Context.toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
-
 @Composable
-private fun Header(title: String, canGoBack: Boolean, onBack: () -> Unit, onSettings: (() -> Unit)?) {
+private fun Header(title: String, canGoBack: Boolean, onBack: () -> Unit, onSearch: (() -> Unit)?, onSettings: (() -> Unit)?) {
     val colors = LocalColors.current
     Row(
         Modifier
@@ -288,6 +305,7 @@ private fun Header(title: String, canGoBack: Boolean, onBack: () -> Unit, onSett
     ) {
         if (canGoBack) IconButton(R.drawable.ic_back, stringResource(R.string.ui_back), onBack) else Spacer(Modifier.width(12.dp))
         BasicText(title, style = colors.heading, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (onSearch != null) IconButton(R.drawable.ic_search, stringResource(R.string.ui_search), onSearch)
         if (onSettings != null) IconButton(R.drawable.ic_settings, stringResource(R.string.ui_settings), onSettings)
     }
 }
@@ -322,6 +340,8 @@ private fun title(screen: Screen, snapshot: LibrarySnapshot?, playlists: List<Pl
     Screen.Home -> stringResource(R.string.app_name)
     Screen.Settings -> stringResource(R.string.ui_settings)
     is Screen.Playlist -> playlists.firstOrNull { it.id == screen.playlistId }?.name.orEmpty()
+    is Screen.Search -> screen.addTo?.let { id -> playlists.firstOrNull { it.id == id } }
+        ?.let { stringResource(R.string.ui_add_to_named, it.name) } ?: stringResource(R.string.ui_search)
     is Screen.Album -> snapshot?.albumIndex(screen.albumId)?.takeIf { it >= 0 }?.let { snapshot.albumTitles[it] }.orEmpty()
     is Screen.Artist -> snapshot?.artistIndex(screen.artistKey)?.takeIf { it >= 0 }?.let { snapshot.artistNames[it] }.orEmpty()
     is Screen.Genre -> snapshot?.genreIndex(screen.genreKey)?.takeIf { it >= 0 }?.let { snapshot.genreNames[it] }.orEmpty()
@@ -376,6 +396,7 @@ private fun encode(screen: Screen): String = when (screen) {
     Screen.Home -> "home"
     Screen.Settings -> "settings"
     is Screen.Playlist -> "playlist:${screen.playlistId}"
+    is Screen.Search -> screen.addTo?.let { "search:$it" } ?: "search"
     is Screen.Album -> "album:${screen.albumId}"
     is Screen.Artist -> "artist:${screen.artistKey}"
     is Screen.Genre -> "genre:${screen.genreKey}"
@@ -384,6 +405,8 @@ private fun encode(screen: Screen): String = when (screen) {
 private fun decode(raw: String): Screen? = when {
     raw == "home" -> Screen.Home
     raw == "settings" -> Screen.Settings
+    raw == "search" -> Screen.Search()
+    raw.startsWith("search:") -> raw.removePrefix("search:").toLongOrNull()?.let { Screen.Search(addTo = it) }
     raw.startsWith("playlist:") -> raw.removePrefix("playlist:").toLongOrNull()?.let(Screen::Playlist)
     raw.startsWith("album:") -> raw.removePrefix("album:").toLongOrNull()?.let(Screen::Album)
     raw.startsWith("artist:") -> raw.removePrefix("artist:").toLongOrNull()?.let(Screen::Artist)

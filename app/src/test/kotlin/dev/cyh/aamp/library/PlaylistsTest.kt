@@ -68,4 +68,40 @@ class PlaylistsTest {
         val playlist = Playlist(1, "Mix", longArrayOf(s.trackIds[one], 999_999, s.trackIds[one]))
         assertArrayEquals(intArrayOf(one, one), playlist.tracksIn(s))
     }
+
+    @Test
+    fun `adding only what is missing, removing a song, and change times`() = runBlocking {
+        var now = 100L
+        val playlists = Playlists(PlaylistStore(dir.root.resolve("p.bin")), scope, Random(1)) { now }
+        val id = playlists.create("Mix", longArrayOf(1, 2))
+        now = 200L
+        playlists.addMissing(id, longArrayOf(2, 3, 3, 4))
+        playlists.idle()
+        assertArrayEquals(longArrayOf(1, 2, 3, 4), playlists.all.value.single().trackIds)
+        assertEquals(200L, playlists.all.value.single().updatedMillis)
+        now = 300L
+        playlists.addMissing(id, longArrayOf(1)) // Nothing new: the change time stays.
+        playlists.removeTrack(id, 2)
+        playlists.idle()
+        assertArrayEquals(longArrayOf(1, 3, 4), playlists.all.value.single().trackIds)
+        assertEquals(300L, playlists.all.value.single().updatedMillis)
+        assertEquals(300L, PlaylistStore(dir.root.resolve("p.bin")).read().single().updatedMillis)
+    }
+
+    @Test
+    fun `version 1 playlist files still read`() {
+        val file = dir.newFile("v1.bin")
+        java.io.DataOutputStream(file.outputStream()).use { out ->
+            out.writeInt(0x41500001)
+            out.writeInt(1)
+            out.writeLong(5)
+            out.writeUTF("Old")
+            out.writeInt(1)
+            out.writeLong(42)
+        }
+        val read = PlaylistStore(file).read().single()
+        assertEquals("Old", read.name)
+        assertArrayEquals(longArrayOf(42), read.trackIds)
+        assertEquals(0L, read.updatedMillis)
+    }
 }

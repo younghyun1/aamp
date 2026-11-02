@@ -3,9 +3,10 @@ package dev.cyh.aamp.library
 /**
  * A playlist made in aamp: a name and its songs as MediaStore track ids, in play order. A song may
  * appear more than once. Songs no longer in the library stay in the playlist but are skipped, so
- * they come back if the file returns with the same id.
+ * they come back if the file returns with the same id. [updatedMillis] is when it last changed,
+ * so pickers can offer recent playlists first.
  */
-class Playlist(val id: Long, val name: String, val trackIds: LongArray) {
+class Playlist(val id: Long, val name: String, val trackIds: LongArray, val updatedMillis: Long = 0) {
     /** The songs still in [snapshot], as snapshot track indices in playlist order. */
     fun tracksIn(snapshot: LibrarySnapshot): IntArray {
         val out = IntArray(trackIds.size)
@@ -17,7 +18,14 @@ class Playlist(val id: Long, val name: String, val trackIds: LongArray) {
         return if (n == out.size) out else out.copyOf(n)
     }
 
-    fun copy(name: String = this.name, trackIds: LongArray = this.trackIds): Playlist = Playlist(id, name, trackIds)
+    fun copy(name: String = this.name, trackIds: LongArray = this.trackIds, updatedMillis: Long = this.updatedMillis): Playlist =
+        Playlist(id, name, trackIds, updatedMillis)
+
+    /** True when every song in [trackIds] is in this playlist. */
+    fun containsAll(trackIds: LongArray): Boolean {
+        val mine = this.trackIds.toHashSet()
+        return trackIds.all { it in mine }
+    }
 
     companion object {
         /** Longest playlist kept; adding beyond it drops the excess. */

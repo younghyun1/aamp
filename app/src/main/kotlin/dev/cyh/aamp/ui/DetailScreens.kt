@@ -96,6 +96,7 @@ internal fun AlbumScreen(
                 playing = snapshot.trackIds[t] == playingTrackId,
                 onClick = { player?.playId(MediaId.Track(snapshot.trackIds[t], TrackContext.InAlbum(albumId))) },
                 onLongClick = { onAddToPlaylist(longArrayOf(snapshot.trackIds[t])) },
+                trailing = { AddButton { onAddToPlaylist(longArrayOf(snapshot.trackIds[t])) } },
             )
         }
     }
@@ -150,6 +151,7 @@ internal fun ArtistScreen(
                 playing = snapshot.trackIds[t] == playingTrackId,
                 onClick = { player?.playId(MediaId.Track(snapshot.trackIds[t], TrackContext.InArtist(artistKey))) },
                 onLongClick = { onAddToPlaylist(longArrayOf(snapshot.trackIds[t])) },
+                trailing = { AddButton { onAddToPlaylist(longArrayOf(snapshot.trackIds[t])) } },
             )
         }
     }

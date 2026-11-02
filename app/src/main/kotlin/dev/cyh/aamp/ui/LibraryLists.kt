@@ -82,6 +82,7 @@ internal fun SongList(snapshot: LibrarySnapshot, player: Player?, playingTrackId
                     playing = snapshot.trackIds[t] == playingTrackId,
                     onClick = { player?.playId(MediaId.Track(snapshot.trackIds[t], TrackContext.InSongs)) },
                     onLongClick = { onAddToPlaylist(longArrayOf(snapshot.trackIds[t])) },
+                    trailing = { AddButton { onAddToPlaylist(longArrayOf(snapshot.trackIds[t])) } },
                 )
             }
         }

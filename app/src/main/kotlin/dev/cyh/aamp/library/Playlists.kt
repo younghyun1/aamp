@@ -18,6 +18,7 @@ class Playlists(
     private val store: PlaylistStore,
     private val scope: CoroutineScope,
     private val random: Random = Random.Default,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val io = Dispatchers.IO.limitedParallelism(1)
     private val loaded = CompletableDeferred<Unit>()
@@ -47,12 +48,24 @@ class Playlists(
         val id = random.nextLong()
         val clean = name.trim().take(Playlist.MAX_NAME_LENGTH)
         if (clean.isEmpty()) return id
-        edit { all -> if (all.size >= Playlist.MAX_PLAYLISTS) all else all + Playlist(id, clean, trackIds.capped()) }
+        edit { all -> if (all.size >= Playlist.MAX_PLAYLISTS) all else all + Playlist(id, clean, trackIds.capped(), clock()) }
         return id
     }
 
     /** Appends [trackIds] to playlist [id]. */
     fun add(id: Long, trackIds: LongArray) = update(id) { it.copy(trackIds = (it.trackIds + trackIds).capped()) }
+
+    /** Appends the songs of [trackIds] that playlist [id] does not have yet, in order. */
+    fun addMissing(id: Long, trackIds: LongArray) = update(id) { p ->
+        val present = p.trackIds.toHashSet()
+        val missing = trackIds.filter { present.add(it) }.toLongArray()
+        if (missing.isEmpty()) p else p.copy(trackIds = (p.trackIds + missing).capped())
+    }
+
+    /** Removes every occurrence of [trackId] from playlist [id]. */
+    fun removeTrack(id: Long, trackId: Long) = update(id) { p ->
+        if (trackId !in p.trackIds) p else p.copy(trackIds = p.trackIds.filter { it != trackId }.toLongArray())
+    }
 
     /** Removes the song at [position] in playlist [id]. */
     fun removeAt(id: Long, position: Int) = update(id) { p ->
@@ -70,7 +83,14 @@ class Playlists(
     /** Returns once every edit made before the call is applied and written. */
     internal suspend fun idle() = withContext(io) {}
 
-    private fun update(id: Long, change: (Playlist) -> Playlist) = edit { all -> all.map { if (it.id == id) change(it) else it } }
+    /** Applies [change] to playlist [id], stamping the change time when something changed. */
+    private fun update(id: Long, change: (Playlist) -> Playlist) = edit { all ->
+        all.map { p ->
+            if (p.id != id) return@map p
+            val changed = change(p)
+            if (changed === p) p else changed.copy(updatedMillis = clock())
+        }
+    }
 
     // Loading is the first task on the serial dispatcher and never suspends, so every edit runs
     // after it, in the order the edits were made.

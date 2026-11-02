@@ -10,7 +10,7 @@ aamp is a local-music player for Android Auto. Its voice search turns Gemini req
 
 - API 37 is the floor. No version checks below 37, no compatibility shims, no compat libraries such as AppCompat or Material.
 - Performance is a requirement. Code on the Android Auto path (service start, browsing, voice requests) never loads UI classes, uses reflection, or blocks the main thread.
-- Dependencies are Media3 (`media3-exoplayer`, `media3-session`), kotlinx-coroutines (core, android, guava), the AndroidX baseline profile tooling and JUnit, plus, for the phone screen only, Compose foundation, `activity-compose`, `lifecycle-runtime-compose` and `media3-ui-compose`. Anything else needs a reason recorded in the design doc first.
+- Dependencies are Media3 (`media3-exoplayer`, `media3-session`), kotlinx-coroutines (core, android, guava), the AndroidX baseline profile tooling and JUnit, plus, for the phone screen only, Compose foundation, `activity-compose`, `lifecycle-runtime-compose`, `media3-ui-compose` and Apache Lucene 8.11 for search (Lucene 9 and later need Java module APIs that Android lacks). Anything else needs a reason recorded in the design doc first.
 - Compose lives in `ui/` only. Nothing outside `ui/` imports it, and the `androidx.startup` provider stays removed from the manifest so Compose's initializers never run when Android Auto starts the process.
 - Media3 session and player calls run on the main thread. Library loading, parsing and matching run on the library dispatcher.
 - Every cache is bounded by entries or bytes. The library snapshot is replaced on rescan, never grown in place.

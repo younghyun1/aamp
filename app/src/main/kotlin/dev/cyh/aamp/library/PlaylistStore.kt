@@ -15,7 +15,8 @@ class PlaylistStore(private val file: File) {
         if (!file.isFile) return emptyList()
         return try {
             DataInputStream(file.inputStream().buffered()).use { input ->
-                if (input.readInt() != MAGIC) return emptyList()
+                val magic = input.readInt()
+                if (magic != MAGIC && magic != MAGIC_V1) return emptyList()
                 val count = input.readInt()
                 if (count !in 0..Playlist.MAX_PLAYLISTS) return emptyList()
                 List(count) {
@@ -23,7 +24,8 @@ class PlaylistStore(private val file: File) {
                     val name = input.readUTF()
                     val size = input.readInt()
                     if (size !in 0..Playlist.MAX_TRACKS) return emptyList()
-                    Playlist(id, name, LongArray(size) { input.readLong() })
+                    val tracks = LongArray(size) { input.readLong() }
+                    Playlist(id, name, tracks, if (magic == MAGIC) input.readLong() else 0L)
                 }
             }
         } catch (_: EOFException) {
@@ -45,6 +47,7 @@ class PlaylistStore(private val file: File) {
                     out.writeUTF(p.name)
                     out.writeInt(p.trackIds.size)
                     for (id in p.trackIds) out.writeLong(id)
+                    out.writeLong(p.updatedMillis)
                 }
             }
             tmp.renameTo(file)
@@ -55,7 +58,8 @@ class PlaylistStore(private val file: File) {
     }
 
     private companion object {
-        /** "AP" plus format version 1. */
-        const val MAGIC = 0x41500001
+        /** "AP" plus format version 2; version 1 had no change times. */
+        const val MAGIC = 0x41500002
+        const val MAGIC_V1 = 0x41500001
     }
 }

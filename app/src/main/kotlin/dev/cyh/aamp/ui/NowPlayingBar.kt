@@ -51,7 +51,8 @@ import androidx.media3.session.R as Media3R
 
 /**
  * The playing track with a seek bar and the basic controls. The artist and album names open the
- * artist's albums and the album's songs, as they do in Android Auto. Draws nothing while the
+ * artist's albums and the album's songs, as they do in Android Auto; a button adds the track to
+ * playlists. Draws nothing while the
  * queue is empty.
  */
 @OptIn(UnstableApi::class) // Media3's Compose state holders
@@ -62,6 +63,7 @@ internal fun NowPlayingBar(
     covers: CoverLoader,
     onOpenAlbum: (albumId: Long) -> Unit,
     onOpenArtist: (artistKey: Long) -> Unit,
+    onAddToPlaylist: (trackIds: LongArray) -> Unit,
 ) {
     val current = rememberCurrentMediaItemState(player)
     val item = current.mediaItem ?: return
@@ -104,6 +106,8 @@ internal fun NowPlayingBar(
                     )
                 }
             }
+            // The playing song into a playlist, as Spotify's now-playing "+" does.
+            if (snapshot != null && track != null) AddButton { onAddToPlaylist(longArrayOf(snapshot.trackIds[track])) }
         }
         val scope = rememberCoroutineScope()
         val progress = rememberProgressStateWithTickInterval(player, PROGRESS_TICK_MS, scope)
