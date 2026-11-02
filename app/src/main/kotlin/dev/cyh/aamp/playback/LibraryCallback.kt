@@ -62,6 +62,9 @@ internal class LibraryCallback(
 ) : MediaLibrarySession.Callback {
     private val items = BrowseItems(context)
 
+    /** Hands long queues to the player a window at a time; the service feeds it track changes. */
+    val window = QueueWindow(items, library, scope)
+
     override fun onGetLibraryRoot(
         session: MediaLibrarySession,
         browser: ControllerInfo,
@@ -160,15 +163,14 @@ internal class LibraryCallback(
         // Android Auto presses play on the last-used app when it connects. Resume the saved
         // queue; shuffle the library only when nothing was saved.
         val loaded = loadedOrFail()
-        restoreQueue(loaded) ?: run {
-            val queue = QueueResolver(loaded, Random.Default).shuffleAll()
-            MediaItemsWithStartPosition(items.queue(loaded.snapshot, queue), queue.startIndex, C.TIME_UNSET)
-        }
+        restoreQueue(loaded) ?: window.start(loaded.snapshot, QueueResolver(loaded, Random.Default).shuffleAll())
     }
 
     /**
-     * The saved queue mapped onto the current library. Tracks that no longer exist are skipped;
-     * if the current one is gone, playback resumes at the next surviving track from its start.
+     * The saved queue mapped onto the current library, with the saved rest of a long queue handed
+     * back to the window. Tracks that no longer exist are skipped; if the current one is gone,
+     * playback resumes at the next surviving track from its start. A long queue saved whole, by
+     * an older version, is windowed like a new one.
      */
     private fun restoreQueue(loaded: LoadedLibrary): MediaItemsWithStartPosition? {
         val saved = queueStore.read() ?: return null
@@ -188,7 +190,22 @@ internal class LibraryCallback(
             restored += items.track(s, t, id.context)
         }
         if (restored.isEmpty()) return null
-        return MediaItemsWithStartPosition(restored, index.coerceIn(0, restored.lastIndex), positionMs)
+        index = index.coerceIn(0, restored.lastIndex)
+
+        val rest = saved.rest
+        if (rest == null && restored.size > QueueWindow.MAX_WHOLE) {
+            val span = QueueWindow.span(restored.size, index)
+            val context = (MediaIds.parse(restored[index].mediaId) as? MediaId.Track)?.context ?: TrackContext.None
+            val ids = LongArray(restored.size) { (MediaIds.parse(restored[it].mediaId) as? MediaId.Track)?.trackId ?: -1L }
+            val window = restored.subList(span.first, span.last).toList()
+            this.window.rest = QueueWindow.Rest(ids, context, span.last, window.last().mediaId)
+            return MediaItemsWithStartPosition(window, index - span.first, positionMs)
+        }
+        // The rest continues after whatever was last restored, even if the saved last one is gone.
+        window.rest = rest?.let { r ->
+            MediaIds.parseContext(r.context)?.let { QueueWindow.Rest(r.trackIds, it, r.next, restored.last().mediaId) }
+        }
+        return MediaItemsWithStartPosition(restored, index, positionMs)
     }
 
     /**
@@ -237,7 +254,7 @@ internal class LibraryCallback(
             when (val resolution = QueueResolver(loaded, Random.Default, playlists.await()).resolve(request)) {
                 is Resolution.Queue -> {
                     log(resolution.summary)
-                    MediaItemsWithStartPosition(items.queue(loaded.snapshot, resolution), resolution.startIndex, C.TIME_UNSET)
+                    window.start(loaded.snapshot, resolution)
                 }
                 is Resolution.NoMatch -> {
                     log("no match for \"${resolution.phrase}\"")
@@ -262,7 +279,7 @@ internal class LibraryCallback(
         val single = mediaItems.singleOrNull()?.let { MediaIds.parse(it.mediaId) }
         val queue = single?.let { queueFor(loaded, lists, it) }
         if (queue != null) {
-            MediaItemsWithStartPosition(items.queue(loaded.snapshot, queue), queue.startIndex, C.TIME_UNSET)
+            window.start(loaded.snapshot, queue)
         } else {
             val expanded = mediaItems.flatMap { expand(loaded, lists, it) }
             if (expanded.isEmpty()) throw RequestFailed("nothing playable among ${mediaItems.size} items")

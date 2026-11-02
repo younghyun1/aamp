@@ -140,17 +140,14 @@ internal class BrowseItems(private val context: Context) {
         }
     }
 
-    /** Media items for a resolved queue, each carrying the list it belongs to. */
-    fun queue(s: LibrarySnapshot, queue: Resolution.Queue): List<MediaItem> {
-        val context = when (val source = queue.source) {
-            is QueueSource.Album -> TrackContext.InAlbum(s.albumIds[source.album])
-            is QueueSource.Artist -> TrackContext.InArtist(s.artistKeys[source.artist])
-            is QueueSource.Genre -> TrackContext.InGenre(s.genreKeys[source.genre])
-            is QueueSource.Playlist -> TrackContext.InPlaylist(source.id)
-            QueueSource.Songs -> TrackContext.InSongs
-            QueueSource.Library -> TrackContext.None
-        }
-        return List(queue.tracks.size) { track(s, queue.tracks[it], context) }
+    /** The context a queue's items carry: the list it came from, which decides what plays around them. */
+    fun contextOf(s: LibrarySnapshot, source: QueueSource): TrackContext = when (source) {
+        is QueueSource.Album -> TrackContext.InAlbum(s.albumIds[source.album])
+        is QueueSource.Artist -> TrackContext.InArtist(s.artistKeys[source.artist])
+        is QueueSource.Genre -> TrackContext.InGenre(s.genreKeys[source.genre])
+        is QueueSource.Playlist -> TrackContext.InPlaylist(source.id)
+        QueueSource.Songs -> TrackContext.InSongs
+        QueueSource.Library -> TrackContext.None
     }
 
     fun album(s: LibrarySnapshot, a: Int, group: String? = null): MediaItem {

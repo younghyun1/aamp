@@ -78,11 +78,12 @@ class PlaybackService : MediaLibraryService() {
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                saveQueue(player, queueStore)
+                callback.window.onAdvance(player)
+                saveQueue(player, queueStore, callback.window)
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (!isPlaying) saveQueue(player, queueStore)
+                if (!isPlaying) saveQueue(player, queueStore, callback.window)
             }
 
             override fun onEvents(player: Player, events: Player.Events) {
@@ -108,13 +109,17 @@ class PlaybackService : MediaLibraryService() {
      * Captures the queue on the main thread and writes it in the background. Writes run in the
      * process scope so one queued just before the service stops still completes.
      */
-    private fun saveQueue(player: Player, store: QueueStore) {
+    private fun saveQueue(player: Player, store: QueueStore, window: QueueWindow) {
         val count = player.mediaItemCount
         if (count == 0 || count > QueueStore.MAX_ITEMS) return
+        val mediaIds = List(count) { player.getMediaItemAt(it).mediaId }
+        // The rest is part of this queue only while the player's last item is the last handed over.
+        val rest = window.rest?.takeIf { it.lastHanded == mediaIds.last() }
         val saved = QueueStore.Saved(
-            mediaIds = List(count) { player.getMediaItemAt(it).mediaId },
+            mediaIds = mediaIds,
             index = player.currentMediaItemIndex,
             positionMs = player.currentPosition.coerceAtLeast(0),
+            rest = rest?.let { QueueStore.SavedRest(it.trackIds, MediaIds.encodeContext(it.context), it.next, it.lastHanded) },
         )
         aamp.appScope.launch(queueWriter) { store.write(saved) }
     }

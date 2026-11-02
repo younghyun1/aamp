@@ -71,14 +71,7 @@ object MediaIds {
         is MediaId.Artist -> ARTIST + id.artistKey
         is MediaId.Genre -> GENRE + id.genreKey
         is MediaId.Playlist -> PLAYLIST + id.playlistId
-        is MediaId.Track -> TRACK + id.trackId + when (val c = id.context) {
-            is TrackContext.InAlbum -> "@" + ALBUM + c.albumId
-            is TrackContext.InArtist -> "@" + ARTIST + c.artistKey
-            is TrackContext.InGenre -> "@" + GENRE + c.genreKey
-            is TrackContext.InPlaylist -> "@" + PLAYLIST + c.playlistId
-            TrackContext.InSongs -> "@" + SONGS
-            TrackContext.None -> ""
-        }
+        is MediaId.Track -> TRACK + id.trackId + encodeContext(id.context)
     }
 
     /** Parses an id produced by [encode]; null for anything else. */
@@ -101,6 +94,19 @@ object MediaIds {
         raw.startsWith(TRACK) -> parseTrack(raw.removePrefix(TRACK))
         else -> null
     }
+
+    /** The context part of a track id, "@album:7"; empty for [TrackContext.None]. */
+    fun encodeContext(context: TrackContext): String = when (context) {
+        is TrackContext.InAlbum -> "@" + ALBUM + context.albumId
+        is TrackContext.InArtist -> "@" + ARTIST + context.artistKey
+        is TrackContext.InGenre -> "@" + GENRE + context.genreKey
+        is TrackContext.InPlaylist -> "@" + PLAYLIST + context.playlistId
+        TrackContext.InSongs -> "@" + SONGS
+        TrackContext.None -> ""
+    }
+
+    /** Parses what [encodeContext] produced; null for anything else. */
+    fun parseContext(raw: String): TrackContext? = parseTrack("0$raw")?.context
 
     private fun parseTrack(rest: String): MediaId.Track? {
         val at = rest.indexOf('@')

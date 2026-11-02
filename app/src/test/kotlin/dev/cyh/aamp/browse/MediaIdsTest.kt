@@ -21,6 +21,7 @@ class MediaIdsTest {
             MediaId.Playlists, MediaId.Playlist(5_000_000_000), MediaId.Track(42, TrackContext.InPlaylist(-5)),
         )
         for (id in ids) assertEquals(id, MediaIds.parse(MediaIds.encode(id)))
+        for (id in ids.filterIsInstance<MediaId.Track>()) assertEquals(id.context, MediaIds.parseContext(MediaIds.encodeContext(id.context)))
         assertEquals("track:42@album:7", MediaIds.encode(MediaId.Track(42, TrackContext.InAlbum(7))))
     }
 
