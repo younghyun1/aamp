@@ -6,8 +6,9 @@ import dev.cyh.aamp.search.TextNormalizer
  * Turns a [VoiceQuery] into a [PlayRequest].
  *
  * Structured hints win when they name something: a focus of album with an album name is an album
- * request, whatever the text says. Otherwise the text is read for "album", "song", "songs by" and
- * similar markers, before, after or inside the name ("Metallica's album Kill 'Em All"); anything
+ * request, whatever the text says. Otherwise the text is read for "album", "song", "songs by",
+ * "genre", "playlist" and similar markers, before, after or inside the name ("Metallica's album
+ * Kill 'Em All", "my road trip playlist"); anything
  * unmarked is [RequestKind.ANY] and the resolver decides. Splitting the rest into title, artist and
  * album is the resolver's job, because only the library can tell "Stand by Me" from "X by Y".
  */
@@ -35,6 +36,8 @@ object VoiceRequestParser {
         listOf("songs", "from", "the", "album"), listOf("songs", "from", "album"),
         listOf("music", "from", "the", "album"), listOf("tracks", "from", "the", "album"),
     )
+    private val playlistPrefixes = listOf(listOf("the", "playlist"), listOf("playlist"), listOf("my", "playlist"))
+    private val genrePrefixes = listOf(listOf("the", "genre"), listOf("genre"))
     private val songPrefixes = listOf(listOf("the", "song"), listOf("song"), listOf("the", "track"), listOf("track"))
     private val artistPrefixes = listOf(
         listOf("songs", "by"), listOf("music", "by"), listOf("tracks", "by"), listOf("stuff", "by"),
@@ -56,7 +59,11 @@ object VoiceRequestParser {
         if (words.isEmpty() || words in everything) return if (shuffle) PlayRequest.ShuffleAll else PlayRequest.Resume
         if (words.first() == "some" && words.size > 1) words.removeAt(0)
 
-        return when {
+        val request = when {
+            stripPrefix(words, playlistPrefixes) -> search(RequestKind.PLAYLIST, words, shuffle)
+            words.size > 1 && words.last() == "playlist" -> search(RequestKind.PLAYLIST, withoutOwner(words.dropLast(1)), shuffle)
+            stripPrefix(words, genrePrefixes) -> search(RequestKind.GENRE, words, shuffle = true)
+            words.size > 1 && words.last() == "genre" -> search(RequestKind.GENRE, words.dropLast(1), shuffle = true)
             stripPrefix(words, albumPrefixes) -> search(RequestKind.ALBUM, words, shuffle)
             words.size > 1 && words.last() == "album" -> search(RequestKind.ALBUM, words.dropLast(1), shuffle)
             stripPrefix(words, songPrefixes) -> search(RequestKind.SONG, words, shuffle)
@@ -65,13 +72,26 @@ object VoiceRequestParser {
             removeInfix(words, Phrases.songWords) -> search(RequestKind.SONG, words, shuffle)
             else -> search(RequestKind.ANY, words, shuffle)
         }
+        // A genre or playlist focus without its own field still says what the text names.
+        if (request !is PlayRequest.Search || request.kind != RequestKind.ANY) return request
+        return when (query.focus) {
+            FOCUS_PLAYLIST -> request.copy(kind = RequestKind.PLAYLIST)
+            FOCUS_GENRE -> request.copy(kind = RequestKind.GENRE, shuffle = true)
+            else -> request
+        }
     }
+
+    /** "My road trip" names the playlist "road trip". */
+    private fun withoutOwner(words: List<String>): List<String> =
+        if (words.size > 1 && (words[0] == "my" || words[0] == "the")) words.drop(1) else words
 
     private fun fromHints(query: VoiceQuery, shuffle: Boolean): PlayRequest? {
         val album = query.album?.takeIf { it.isNotBlank() }
         val artist = query.artist?.takeIf { it.isNotBlank() }
         val title = query.title?.takeIf { it.isNotBlank() }
+        val genre = query.genre?.takeIf { it.isNotBlank() }
         return when (query.focus) {
+            FOCUS_GENRE if genre != null -> PlayRequest.Search(RequestKind.GENRE, genre, null, shuffle = true)
             FOCUS_ALBUM if album != null -> PlayRequest.Search(RequestKind.ALBUM, album, artist, shuffle)
             FOCUS_SONG if title != null -> PlayRequest.Search(RequestKind.SONG, title, artist, shuffle, album)
             FOCUS_ARTIST if artist != null -> PlayRequest.Search(RequestKind.ARTIST, artist, null, shuffle = true)

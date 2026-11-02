@@ -8,6 +8,8 @@ import kotlin.math.min
  * normalization). The strongest applicable signal wins:
  *
  * - identical text: 1.0
+ * - identical but for spaces, as when speech recognition joins or splits a word ("roadtrip" for
+ *   "Road Trip", "ac dc" for "ACDC"): 0.95
  * - the whole query as a run of words inside the entry, as when typing a partial name:
  *   0.6 to 0.9, by how much of the entry it covers
  * - word alignment: the entry's words matched in order against the query's, allowing partial
@@ -24,6 +26,7 @@ object Similarity {
     fun score(query: MatchKey, target: MatchKey): Float {
         if (query.isEmpty || target.isEmpty) return 0f
         if (query.text == target.text) return 1f
+        if (equalIgnoringSpaces(query.text, target.text)) return SPACING_ONLY
 
         var best = 0f
         val q = query.tokens
@@ -32,6 +35,21 @@ object Similarity {
         best = max(best, 0.95f * alignmentF1(q, t))
         best = max(best, 0.8f * sortedDice(query.trigrams, target.trigrams))
         return best
+    }
+
+    /** True when [a] and [b] have the same characters once spaces are removed; allocates nothing. */
+    private fun equalIgnoringSpaces(a: String, b: String): Boolean {
+        if (kotlin.math.abs(a.length - b.length) > MAX_SPACE_DIFFERENCE) return false
+        var i = 0
+        var j = 0
+        while (true) {
+            while (i < a.length && a[i] == ' ') i++
+            while (j < b.length && b[j] == ' ') j++
+            if (i == a.length || j == b.length) return i == a.length && j == b.length
+            if (a[i] != b[j]) return false
+            i++
+            j++
+        }
     }
 
     /** True when [needle] appears as a contiguous run of tokens inside [haystack]. */
@@ -115,5 +133,7 @@ object Similarity {
     }
 
     private const val PREFIX_SIMILARITY = 0.85f
+    private const val SPACING_ONLY = 0.95f
+    private const val MAX_SPACE_DIFFERENCE = 3
     private const val MIN_NEAR_MISS = 0.75f
 }

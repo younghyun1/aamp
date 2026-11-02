@@ -13,7 +13,7 @@ data class VoiceQuery(
     val genre: String? = null,
 )
 
-enum class RequestKind { ALBUM, ARTIST, SONG, ANY }
+enum class RequestKind { ALBUM, ARTIST, SONG, GENRE, PLAYLIST, ANY }
 
 /** What a voice request asks for, before it is matched against the library. */
 sealed interface PlayRequest {

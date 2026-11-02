@@ -62,7 +62,7 @@ internal fun ArtistList(snapshot: LibrarySnapshot, covers: CoverLoader, onOpen: 
 
 /** Every song by title; tapping one plays the list from it, as Android Auto's Songs tab does. */
 @Composable
-internal fun SongList(snapshot: LibrarySnapshot, player: Player?, playingTrackId: Long?) {
+internal fun SongList(snapshot: LibrarySnapshot, player: Player?, playingTrackId: Long?, onAddToPlaylist: (trackIds: LongArray) -> Unit) {
     val sections = remember(snapshot) {
         // Section members are track indices; the list is in title order, so map tracks to rows.
         val rowOf = IntArray(snapshot.trackCount)
@@ -81,6 +81,7 @@ internal fun SongList(snapshot: LibrarySnapshot, player: Player?, playingTrackId
                     durationMs = snapshot.trackDurationMs[t],
                     playing = snapshot.trackIds[t] == playingTrackId,
                     onClick = { player?.playId(MediaId.Track(snapshot.trackIds[t], TrackContext.InSongs)) },
+                    onLongClick = { onAddToPlaylist(longArrayOf(snapshot.trackIds[t])) },
                 )
             }
         }

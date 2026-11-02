@@ -55,16 +55,17 @@ internal fun IconButton(
     }
 }
 
-/** A filled pill-shaped text button in the accent color. */
+/** A pill-shaped text button: filled in the accent color, or a quieter one on the surface color. */
 @Composable
-internal fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, filled: Boolean = true) {
     val colors = LocalColors.current
     BasicText(
         text,
-        style = colors.body.copy(color = colors.onAccent, fontWeight = FontWeight.Medium),
+        style = colors.body.copy(color = if (filled) colors.onAccent else colors.accent, fontWeight = FontWeight.Medium),
+        maxLines = 1,
         modifier = modifier
             .clip(RoundedCornerShape(percent = 50))
-            .background(colors.accent)
+            .background(if (filled) colors.accent else colors.surface)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 10.dp),
     )

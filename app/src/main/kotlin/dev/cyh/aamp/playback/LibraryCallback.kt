@@ -27,6 +27,8 @@ import dev.cyh.aamp.browse.TrackContext
 import dev.cyh.aamp.library.Library
 import dev.cyh.aamp.library.LibraryState
 import dev.cyh.aamp.library.LoadedLibrary
+import dev.cyh.aamp.library.Playlist
+import dev.cyh.aamp.library.Playlists
 import dev.cyh.aamp.search.MatchKey
 import dev.cyh.aamp.voice.PlayRequest
 import dev.cyh.aamp.voice.QueueResolver
@@ -53,6 +55,7 @@ import kotlin.time.Duration.Companion.seconds
 internal class LibraryCallback(
     private val context: Context,
     private val library: Library,
+    private val playlists: Playlists,
     private val voiceLog: VoiceLog,
     private val scope: CoroutineScope,
     private val queueStore: QueueStore,
@@ -70,8 +73,9 @@ internal class LibraryCallback(
         browser: ControllerInfo,
         mediaId: String,
     ): ListenableFuture<LibraryResult<MediaItem>> = scope.future(Dispatchers.Default) {
+        val lists = playlists.await()
         withLibrary { loaded ->
-            val item = MediaIds.parse(mediaId)?.let { items.item(loaded, it) }
+            val item = MediaIds.parse(mediaId)?.let { items.item(loaded, lists, it) }
             if (item != null) LibraryResult.ofItem(item, null) else LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
         }
     }
@@ -84,8 +88,9 @@ internal class LibraryCallback(
         pageSize: Int,
         params: LibraryParams?,
     ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = scope.future(Dispatchers.Default) {
+        val lists = playlists.await()
         withLibrary { loaded ->
-            val children = MediaIds.parse(parentId)?.let { items.children(loaded, it, page, pageSize) }
+            val children = MediaIds.parse(parentId)?.let { items.children(loaded, lists, it, page, pageSize) }
             if (children != null) LibraryResult.ofItemList(children, params) else LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
         }
     }
@@ -143,7 +148,8 @@ internal class LibraryCallback(
         mediaItems: List<MediaItem>,
     ): ListenableFuture<List<MediaItem>> = scope.future(Dispatchers.Default) {
         val loaded = loadedOrFail()
-        mediaItems.flatMap { expand(loaded, it) }
+        val lists = playlists.await()
+        mediaItems.flatMap { expand(loaded, lists, it) }
     }
 
     override fun onPlaybackResumption(
@@ -228,7 +234,7 @@ internal class LibraryCallback(
                     fail(session, stateError(state))
                 }
             }
-            when (val resolution = QueueResolver(loaded, Random.Default).resolve(request)) {
+            when (val resolution = QueueResolver(loaded, Random.Default, playlists.await()).resolve(request)) {
                 is Resolution.Queue -> {
                     log(resolution.summary)
                     MediaItemsWithStartPosition(items.queue(loaded.snapshot, resolution), resolution.startIndex, C.TIME_UNSET)
@@ -252,21 +258,22 @@ internal class LibraryCallback(
         startPositionMs: Long,
     ): ListenableFuture<MediaItemsWithStartPosition> = scope.future(Dispatchers.Default) {
         val loaded = loadedOrFail()
+        val lists = playlists.await()
         val single = mediaItems.singleOrNull()?.let { MediaIds.parse(it.mediaId) }
-        val queue = single?.let { queueFor(loaded, it) }
+        val queue = single?.let { queueFor(loaded, lists, it) }
         if (queue != null) {
             MediaItemsWithStartPosition(items.queue(loaded.snapshot, queue), queue.startIndex, C.TIME_UNSET)
         } else {
-            val expanded = mediaItems.flatMap { expand(loaded, it) }
+            val expanded = mediaItems.flatMap { expand(loaded, lists, it) }
             if (expanded.isEmpty()) throw RequestFailed("nothing playable among ${mediaItems.size} items")
             MediaItemsWithStartPosition(expanded, startIndex, startPositionMs)
         }
     }
 
     /** The queue that picking [id] should start: a track plays within the list it was picked from. */
-    private fun queueFor(loaded: LoadedLibrary, id: MediaId): Resolution.Queue? {
+    private fun queueFor(loaded: LoadedLibrary, lists: List<Playlist>, id: MediaId): Resolution.Queue? {
         val s = loaded.snapshot
-        val resolver = QueueResolver(loaded, Random.Default)
+        val resolver = QueueResolver(loaded, Random.Default, lists)
         return when (id) {
             is MediaId.Track -> {
                 val t = s.trackIndex(id.trackId).takeIf { it >= 0 } ?: return null
@@ -278,6 +285,9 @@ internal class LibraryCallback(
                     is TrackContext.InGenre -> s.genreIndex(c.genreKey).takeIf { it >= 0 }
                         ?.let { resolver.genre(it, shuffle = false, startTrack = t) }
                         ?: resolver.album(s.trackAlbum[t], t)
+                    is TrackContext.InPlaylist -> lists.firstOrNull { it.id == c.playlistId }
+                        ?.let { resolver.playlist(it, shuffle = false, startTrack = t) }
+                        ?: resolver.album(s.trackAlbum[t], t)
                     TrackContext.InSongs -> resolver.songs(t)
                     TrackContext.None -> resolver.album(s.trackAlbum[t], t)
                 }
@@ -286,14 +296,15 @@ internal class LibraryCallback(
             is MediaId.Artist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { resolver.artist(it, shuffle = true) }
             is MediaId.ShuffleArtist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { resolver.artist(it, shuffle = true) }
             is MediaId.Genre -> s.genreIndex(id.genreKey).takeIf { it >= 0 }?.let { resolver.genre(it, shuffle = true) }
+            is MediaId.Playlist -> lists.firstOrNull { it.id == id.playlistId }?.let { resolver.playlist(it, shuffle = false) }
             MediaId.ShuffleAll -> resolver.shuffleAll()
-            MediaId.Root, MediaId.Albums, MediaId.Artists, MediaId.Recent, MediaId.Songs,
+            MediaId.Root, MediaId.Albums, MediaId.Artists, MediaId.Recent, MediaId.Songs, MediaId.Playlists,
             is MediaId.AlbumSection, is MediaId.ArtistSection, is MediaId.SongSection -> null
         }
     }
 
     /** The playable tracks behind one item, for queue additions; unknown items pass through if playable. */
-    private fun expand(loaded: LoadedLibrary, item: MediaItem): List<MediaItem> {
+    private fun expand(loaded: LoadedLibrary, lists: List<Playlist>, item: MediaItem): List<MediaItem> {
         val s = loaded.snapshot
         return when (val id = MediaIds.parse(item.mediaId)) {
             is MediaId.Track -> s.trackIndex(id.trackId).takeIf { it >= 0 }?.let { listOf(items.track(s, it, id.context)) }
@@ -306,6 +317,9 @@ internal class LibraryCallback(
             is MediaId.Genre -> s.genreIndex(id.genreKey).takeIf { it >= 0 }?.let { g ->
                 s.genreTracks(g).map { items.track(s, it, TrackContext.InGenre(id.genreKey)) }
             }
+            is MediaId.Playlist -> lists.firstOrNull { it.id == id.playlistId }?.let { p ->
+                p.tracksIn(s).map { items.track(s, it, TrackContext.InPlaylist(p.id)) }
+            }
             else -> null
         } ?: if (item.localConfiguration != null) listOf(item) else emptyList()
     }
@@ -314,7 +328,7 @@ internal class LibraryCallback(
     fun updateQueueTitle(player: Player) {
         val first = if (player.mediaItemCount > 0) player.getMediaItemAt(0) else null
         val loaded = (library.state.value as? LibraryState.Ready)?.library
-        val title = first?.let { items.queueTitle(loaded?.snapshot, it) }
+        val title = first?.let { items.queueTitle(loaded?.snapshot, playlists.all.value, it) }
         if (player.playlistMetadata.title?.toString() == title) return
         player.playlistMetadata = MediaMetadata.Builder().setTitle(title).build()
     }

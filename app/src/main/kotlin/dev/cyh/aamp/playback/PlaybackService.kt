@@ -12,11 +12,14 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import dev.cyh.aamp.R
 import dev.cyh.aamp.aamp
+import dev.cyh.aamp.browse.MediaId
+import dev.cyh.aamp.browse.MediaIds
 import dev.cyh.aamp.widget.NowPlayingWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -44,7 +47,7 @@ class PlaybackService : MediaLibraryService() {
         val app = aamp
         val queueStore = QueueStore(File(noBackupFilesDir, "queue.bin"))
         val player = AudioPlayer.create(this)
-        val callback = LibraryCallback(this, app.library, app.voiceLog, scope, queueStore)
+        val callback = LibraryCallback(this, app.library, app.playlists, app.voiceLog, scope, queueStore)
         val builder = MediaLibrarySession.Builder(this, player, callback)
             .setMediaButtonPreferences(controlButtons(player))
         // Tapping the notification opens the phone screen. The launch intent avoids naming the
@@ -54,6 +57,13 @@ class PlaybackService : MediaLibraryService() {
         }
         val built = builder.build()
         session = built
+        // Android Auto caches browse levels; tell it when playlists change.
+        scope.launch {
+            app.playlists.all.drop(1).collect { lists ->
+                built.notifyChildrenChanged(MediaIds.encode(MediaId.Playlists), lists.size, null)
+                for (p in lists) built.notifyChildrenChanged(MediaIds.encode(MediaId.Playlist(p.id)), p.trackIds.size, null)
+            }
+        }
         player.addListener(object : Player.Listener {
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                 built.setMediaButtonPreferences(controlButtons(player))

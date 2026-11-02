@@ -75,4 +75,11 @@ class TextNormalizerTest {
         assertEquals(1f, full)
         assertTrue("partial $partial", partial in 0.6f..0.9f)
     }
+
+    @Test
+    fun `words joined or split by speech recognition still match closely`() {
+        assertEquals(0.95f, Similarity.score(MatchKey.of("roadtrip"), MatchKey.of("Road Trip")))
+        assertEquals(0.95f, Similarity.score(MatchKey.of("acdc"), MatchKey.of("AC/DC")))
+        assertTrue(Similarity.score(MatchKey.of("road trips"), MatchKey.of("Road Trip")) < 0.95f)
+    }
 }

@@ -3,6 +3,7 @@ package dev.cyh.aamp.ui
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
@@ -62,6 +64,7 @@ import dev.cyh.aamp.artwork.ArtworkCache
 import dev.cyh.aamp.browse.MediaId
 import dev.cyh.aamp.browse.MediaIds
 import dev.cyh.aamp.library.LibrarySnapshot
+import dev.cyh.aamp.library.Playlist
 import dev.cyh.aamp.library.LibraryState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -70,10 +73,11 @@ import kotlinx.coroutines.launch
 internal sealed interface Screen {
     /** The library tabs. */
     data object Home : Screen
-    data object Status : Screen
+    data object Settings : Screen
     data class Album(val albumId: Long) : Screen
     data class Artist(val artistKey: Long) : Screen
     data class Genre(val genreKey: Long) : Screen
+    data class Playlist(val playlistId: Long) : Screen
 }
 
 /** The library tabs on the home page. */
@@ -82,13 +86,14 @@ internal enum class Tab(@StringRes val label: Int) {
     Artists(R.string.browse_artists),
     Songs(R.string.browse_songs),
     Genres(R.string.ui_genres),
+    Playlists(R.string.browse_playlists),
 }
 
 /**
- * The phone screen: the library as Albums, Artists, Songs and Genres tabs, album, artist and genre
- * pages, the playing track with controls, and a status page with permissions and the voice log.
- * Every page keeps its scroll position while it is on the back stack. Nothing animates: pages and
- * tabs switch at once, and letter jumps scroll without animation.
+ * The phone screen: the library as Albums, Artists, Songs, Genres and Playlists tabs, album,
+ * artist, genre and playlist pages, the playing track with controls, and settings. Every page keeps
+ * its scroll position while it is on the back stack. Nothing animates: pages, tabs and panels
+ * appear at once, and letter jumps scroll without animation.
  */
 @Composable
 internal fun AampApp() {
@@ -134,81 +139,144 @@ internal fun AampApp() {
     val openAlbum: (Long) -> Unit = { open(Screen.Album(it)) }
     val openArtist: (Long) -> Unit = { open(Screen.Artist(it)) }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(colors.background)
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
-    ) {
-        Header(
-            title = title(screen, snapshot),
-            canGoBack = stack.size > 1,
-            onBack = back,
-            onStatus = if (screen != Screen.Status) ({ open(Screen.Status) }) else null,
-        )
-        if (screen == Screen.Home) Tabs(tab, onSelect = { tab = it })
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            pageStates.SaveableStateProvider(encode(screen)) {
-                when (screen) {
-                    Screen.Status -> StatusScreen(libraryState, access, requestAccess, rescan)
-                    Screen.Home -> when {
-                        snapshot == null -> LibraryMessage(libraryState, requestAccess, rescan)
-                        snapshot.trackCount == 0 -> Message(stringResource(R.string.ui_no_music))
-                        // Each tab keeps its own scroll position too.
-                        else -> pageStates.SaveableStateProvider("tab:${tab.name}") {
-                            when (tab) {
-                                Tab.Albums -> AlbumGrid(
-                                    snapshot,
-                                    albums = null,
-                                    covers = covers,
-                                    onOpen = { openAlbum(snapshot.albumIds[it]) },
-                                    onPlay = { controller?.playId(MediaId.Album(snapshot.albumIds[it])) },
-                                )
-                                Tab.Artists -> ArtistList(snapshot, covers, openArtist)
-                                Tab.Songs -> SongList(snapshot, controller, playingTrackId)
-                                Tab.Genres -> if (snapshot.genreCount > 0) {
-                                    GenreList(snapshot, onOpen = { open(Screen.Genre(it)) })
-                                } else {
-                                    Message(stringResource(R.string.ui_no_genres))
+    val playlists by app.playlists.all.collectAsStateWithLifecycle()
+    // Songs waiting for a playlist to be picked; empty when making a playlist from the tab.
+    var adding by rememberSaveable { mutableStateOf<LongArray?>(null) }
+    var deleting by rememberSaveable { mutableStateOf<Long?>(null) }
+    val addToPlaylist: (LongArray) -> Unit = { adding = it }
+    val resources = LocalResources.current
+
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(colors.background)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
+        ) {
+            Header(
+                title = title(screen, snapshot, playlists),
+                canGoBack = stack.size > 1,
+                onBack = back,
+                onSettings = if (screen != Screen.Settings) ({ open(Screen.Settings) }) else null,
+            )
+            if (screen == Screen.Home) Tabs(tab, onSelect = { tab = it })
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                pageStates.SaveableStateProvider(encode(screen)) {
+                    when (screen) {
+                        Screen.Settings -> SettingsScreen(libraryState, access, requestAccess, rescan)
+                        Screen.Home -> when {
+                            snapshot == null -> LibraryMessage(libraryState, requestAccess, rescan)
+                            snapshot.trackCount == 0 -> Message(stringResource(R.string.ui_no_music))
+                            // Each tab keeps its own scroll position too.
+                            else -> pageStates.SaveableStateProvider("tab:${tab.name}") {
+                                when (tab) {
+                                    Tab.Albums -> AlbumGrid(
+                                        snapshot,
+                                        albums = null,
+                                        covers = covers,
+                                        onOpen = { openAlbum(snapshot.albumIds[it]) },
+                                        onPlay = { controller?.playId(MediaId.Album(snapshot.albumIds[it])) },
+                                    )
+                                    Tab.Artists -> ArtistList(snapshot, covers, openArtist)
+                                    Tab.Songs -> SongList(snapshot, controller, playingTrackId, addToPlaylist)
+                                    Tab.Genres -> if (snapshot.genreCount > 0) {
+                                        GenreList(snapshot, onOpen = { open(Screen.Genre(it)) })
+                                    } else {
+                                        Message(stringResource(R.string.ui_no_genres))
+                                    }
+                                    Tab.Playlists -> PlaylistList(
+                                        snapshot,
+                                        playlists,
+                                        onOpen = { open(Screen.Playlist(it)) },
+                                        onCreate = { adding = LongArray(0) },
+                                    )
                                 }
                             }
                         }
-                    }
-                    is Screen.Album -> {
-                        val album = snapshot?.albumIndex(screen.albumId) ?: -1
-                        if (snapshot != null && album >= 0) {
-                            AlbumScreen(snapshot, album, covers, controller, playingTrackId, openArtist)
-                        } else {
-                            Message(stringResource(R.string.ui_not_found))
+                        is Screen.Album -> {
+                            val album = snapshot?.albumIndex(screen.albumId) ?: -1
+                            if (snapshot != null && album >= 0) {
+                                AlbumScreen(snapshot, album, covers, controller, playingTrackId, openArtist, addToPlaylist)
+                            } else {
+                                Message(stringResource(R.string.ui_not_found))
+                            }
                         }
-                    }
-                    is Screen.Artist -> {
-                        val artist = snapshot?.artistIndex(screen.artistKey) ?: -1
-                        if (snapshot != null && artist >= 0) {
-                            ArtistScreen(snapshot, artist, covers, controller, playingTrackId, openAlbum)
-                        } else {
-                            Message(stringResource(R.string.ui_not_found))
+                        is Screen.Artist -> {
+                            val artist = snapshot?.artistIndex(screen.artistKey) ?: -1
+                            if (snapshot != null && artist >= 0) {
+                                ArtistScreen(snapshot, artist, covers, controller, playingTrackId, openAlbum, addToPlaylist)
+                            } else {
+                                Message(stringResource(R.string.ui_not_found))
+                            }
                         }
-                    }
-                    is Screen.Genre -> {
-                        val genre = snapshot?.genreIndex(screen.genreKey) ?: -1
-                        if (snapshot != null && genre >= 0) {
-                            GenreScreen(snapshot, genre, covers, controller, openAlbum)
-                        } else {
-                            Message(stringResource(R.string.ui_not_found))
+                        is Screen.Genre -> {
+                            val genre = snapshot?.genreIndex(screen.genreKey) ?: -1
+                            if (snapshot != null && genre >= 0) {
+                                GenreScreen(snapshot, genre, covers, controller, openAlbum)
+                            } else {
+                                Message(stringResource(R.string.ui_not_found))
+                            }
+                        }
+                        is Screen.Playlist -> {
+                            val playlist = playlists.firstOrNull { it.id == screen.playlistId }
+                            if (snapshot != null && playlist != null) {
+                                PlaylistScreen(
+                                    snapshot,
+                                    playlist,
+                                    controller,
+                                    playingTrackId,
+                                    onRemove = { app.playlists.removeAt(playlist.id, it) },
+                                    onDelete = { deleting = playlist.id },
+                                )
+                            } else {
+                                Message(stringResource(R.string.ui_not_found))
+                            }
                         }
                     }
                 }
             }
+            if (controller != null) NowPlayingBar(controller, snapshot, covers, openAlbum, openArtist)
+            // Behind the navigation bar, in the color of whatever is above it.
+            Spacer(Modifier.fillMaxWidth().windowInsetsBottomHeight(WindowInsets.navigationBars).background(colors.surface))
         }
-        if (controller != null) NowPlayingBar(controller, snapshot, covers, openAlbum, openArtist)
-        // Behind the navigation bar, in the color of whatever is above it.
-        Spacer(Modifier.fillMaxWidth().windowInsetsBottomHeight(WindowInsets.navigationBars).background(colors.surface))
+
+        adding?.let { songs ->
+            AddToPlaylistPanel(
+                playlists,
+                adding = songs.isNotEmpty(),
+                onPick = { id ->
+                    app.playlists.add(id, songs)
+                    playlists.firstOrNull { it.id == id }?.let { context.toast(resources.getString(R.string.ui_added_to_playlist, it.name)) }
+                    adding = null
+                },
+                onCreate = { name ->
+                    app.playlists.create(name, songs)
+                    if (songs.isNotEmpty()) context.toast(resources.getString(R.string.ui_added_to_playlist, name.trim()))
+                    adding = null
+                },
+                onDismiss = { adding = null },
+            )
+        }
+        deleting?.let { id ->
+            val name = playlists.firstOrNull { it.id == id }?.name.orEmpty()
+            ConfirmPanel(
+                stringResource(R.string.ui_delete_playlist, name),
+                stringResource(R.string.ui_delete),
+                onConfirm = {
+                    app.playlists.delete(id)
+                    deleting = null
+                    if (stack.last() == Screen.Playlist(id)) back()
+                },
+                onDismiss = { deleting = null },
+            )
+        }
     }
 }
 
+private fun Context.toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+
 @Composable
-private fun Header(title: String, canGoBack: Boolean, onBack: () -> Unit, onStatus: (() -> Unit)?) {
+private fun Header(title: String, canGoBack: Boolean, onBack: () -> Unit, onSettings: (() -> Unit)?) {
     val colors = LocalColors.current
     Row(
         Modifier
@@ -220,7 +288,7 @@ private fun Header(title: String, canGoBack: Boolean, onBack: () -> Unit, onStat
     ) {
         if (canGoBack) IconButton(R.drawable.ic_back, stringResource(R.string.ui_back), onBack) else Spacer(Modifier.width(12.dp))
         BasicText(title, style = colors.heading, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (onStatus != null) IconButton(R.drawable.ic_info, stringResource(R.string.ui_status), onStatus)
+        if (onSettings != null) IconButton(R.drawable.ic_settings, stringResource(R.string.ui_settings), onSettings)
     }
 }
 
@@ -250,9 +318,10 @@ private fun Tabs(selected: Tab, onSelect: (Tab) -> Unit) {
 }
 
 @Composable
-private fun title(screen: Screen, snapshot: LibrarySnapshot?): String = when (screen) {
+private fun title(screen: Screen, snapshot: LibrarySnapshot?, playlists: List<Playlist>): String = when (screen) {
     Screen.Home -> stringResource(R.string.app_name)
-    Screen.Status -> stringResource(R.string.ui_status)
+    Screen.Settings -> stringResource(R.string.ui_settings)
+    is Screen.Playlist -> playlists.firstOrNull { it.id == screen.playlistId }?.name.orEmpty()
     is Screen.Album -> snapshot?.albumIndex(screen.albumId)?.takeIf { it >= 0 }?.let { snapshot.albumTitles[it] }.orEmpty()
     is Screen.Artist -> snapshot?.artistIndex(screen.artistKey)?.takeIf { it >= 0 }?.let { snapshot.artistNames[it] }.orEmpty()
     is Screen.Genre -> snapshot?.genreIndex(screen.genreKey)?.takeIf { it >= 0 }?.let { snapshot.genreNames[it] }.orEmpty()
@@ -305,7 +374,8 @@ private val StackSaver = Saver<SnapshotStateList<Screen>, List<String>>(
 
 private fun encode(screen: Screen): String = when (screen) {
     Screen.Home -> "home"
-    Screen.Status -> "status"
+    Screen.Settings -> "settings"
+    is Screen.Playlist -> "playlist:${screen.playlistId}"
     is Screen.Album -> "album:${screen.albumId}"
     is Screen.Artist -> "artist:${screen.artistKey}"
     is Screen.Genre -> "genre:${screen.genreKey}"
@@ -313,7 +383,8 @@ private fun encode(screen: Screen): String = when (screen) {
 
 private fun decode(raw: String): Screen? = when {
     raw == "home" -> Screen.Home
-    raw == "status" -> Screen.Status
+    raw == "settings" -> Screen.Settings
+    raw.startsWith("playlist:") -> raw.removePrefix("playlist:").toLongOrNull()?.let(Screen::Playlist)
     raw.startsWith("album:") -> raw.removePrefix("album:").toLongOrNull()?.let(Screen::Album)
     raw.startsWith("artist:") -> raw.removePrefix("artist:").toLongOrNull()?.let(Screen::Artist)
     raw.startsWith("genre:") -> raw.removePrefix("genre:").toLongOrNull()?.let(Screen::Genre)

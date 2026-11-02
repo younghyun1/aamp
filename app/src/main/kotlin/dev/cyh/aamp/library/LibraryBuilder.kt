@@ -161,6 +161,7 @@ object LibraryBuilder {
             albums = KindIndex.build(Array(albumCount) { MatchKey.ofNormalized(albums[it].titleKey) }),
             artists = KindIndex.build(Array(artistCount) { MatchKey.ofNormalized(artistOrder[it]) }),
             tracks = KindIndex.build(Array(trackCount) { MatchKey.ofNormalized(titles[it]) }),
+            genres = KindIndex.build(Array(genreCount) { MatchKey.ofNormalized(genreOrder[it]) }),
         )
         return LoadedLibrary(snapshot, search)
     }

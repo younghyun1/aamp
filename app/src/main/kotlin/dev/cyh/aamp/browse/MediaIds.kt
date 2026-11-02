@@ -14,6 +14,7 @@ sealed interface MediaId {
     data object Artists : MediaId
     data object Recent : MediaId
     data object Songs : MediaId
+    data object Playlists : MediaId
     data object ShuffleAll : MediaId
     /** Every track by an artist, shuffled: the first child of an artist, which Android Auto cannot play from inside. */
     data class ShuffleArtist(val artistKey: Long) : MediaId
@@ -23,6 +24,7 @@ sealed interface MediaId {
     data class Album(val albumId: Long) : MediaId
     data class Artist(val artistKey: Long) : MediaId
     data class Genre(val genreKey: Long) : MediaId
+    data class Playlist(val playlistId: Long) : MediaId
     data class Track(val trackId: Long, val context: TrackContext) : MediaId
 }
 
@@ -30,6 +32,7 @@ sealed interface TrackContext {
     data class InAlbum(val albumId: Long) : TrackContext
     data class InArtist(val artistKey: Long) : TrackContext
     data class InGenre(val genreKey: Long) : TrackContext
+    data class InPlaylist(val playlistId: Long) : TrackContext
     data object InSongs : TrackContext
     data object None : TrackContext
 }
@@ -40,6 +43,7 @@ object MediaIds {
     private const val ARTISTS = "artists"
     private const val RECENT = "recent"
     private const val SONGS = "songs"
+    private const val PLAYLISTS = "playlists"
     private const val SHUFFLE_ALL = "shuffle:all"
     private const val SHUFFLE_ARTIST = "shuffle:artist:"
     private const val ALBUM_SECTION = "albums:"
@@ -48,6 +52,7 @@ object MediaIds {
     private const val ALBUM = "album:"
     private const val ARTIST = "artist:"
     private const val GENRE = "genre:"
+    private const val PLAYLIST = "playlist:"
     private const val TRACK = "track:"
 
     fun encode(id: MediaId): String = when (id) {
@@ -56,6 +61,7 @@ object MediaIds {
         MediaId.Artists -> ARTISTS
         MediaId.Recent -> RECENT
         MediaId.Songs -> SONGS
+        MediaId.Playlists -> PLAYLISTS
         MediaId.ShuffleAll -> SHUFFLE_ALL
         is MediaId.ShuffleArtist -> SHUFFLE_ARTIST + id.artistKey
         is MediaId.AlbumSection -> ALBUM_SECTION + id.label
@@ -64,10 +70,12 @@ object MediaIds {
         is MediaId.Album -> ALBUM + id.albumId
         is MediaId.Artist -> ARTIST + id.artistKey
         is MediaId.Genre -> GENRE + id.genreKey
+        is MediaId.Playlist -> PLAYLIST + id.playlistId
         is MediaId.Track -> TRACK + id.trackId + when (val c = id.context) {
             is TrackContext.InAlbum -> "@" + ALBUM + c.albumId
             is TrackContext.InArtist -> "@" + ARTIST + c.artistKey
             is TrackContext.InGenre -> "@" + GENRE + c.genreKey
+            is TrackContext.InPlaylist -> "@" + PLAYLIST + c.playlistId
             TrackContext.InSongs -> "@" + SONGS
             TrackContext.None -> ""
         }
@@ -80,6 +88,7 @@ object MediaIds {
         raw == ARTISTS -> MediaId.Artists
         raw == RECENT -> MediaId.Recent
         raw == SONGS -> MediaId.Songs
+        raw == PLAYLISTS -> MediaId.Playlists
         raw == SHUFFLE_ALL -> MediaId.ShuffleAll
         raw.startsWith(SHUFFLE_ARTIST) -> raw.removePrefix(SHUFFLE_ARTIST).toLongOrNull()?.let(MediaId::ShuffleArtist)
         raw.startsWith(ALBUM_SECTION) -> raw.removePrefix(ALBUM_SECTION).ifEmpty { null }?.let(MediaId::AlbumSection)
@@ -88,6 +97,7 @@ object MediaIds {
         raw.startsWith(ALBUM) -> raw.removePrefix(ALBUM).toLongOrNull()?.let(MediaId::Album)
         raw.startsWith(ARTIST) -> raw.removePrefix(ARTIST).toLongOrNull()?.let(MediaId::Artist)
         raw.startsWith(GENRE) -> raw.removePrefix(GENRE).toLongOrNull()?.let(MediaId::Genre)
+        raw.startsWith(PLAYLIST) -> raw.removePrefix(PLAYLIST).toLongOrNull()?.let(MediaId::Playlist)
         raw.startsWith(TRACK) -> parseTrack(raw.removePrefix(TRACK))
         else -> null
     }
@@ -100,6 +110,7 @@ object MediaIds {
             is MediaId.Album -> TrackContext.InAlbum(parent.albumId)
             is MediaId.Artist -> TrackContext.InArtist(parent.artistKey)
             is MediaId.Genre -> TrackContext.InGenre(parent.genreKey)
+            is MediaId.Playlist -> TrackContext.InPlaylist(parent.playlistId)
             MediaId.Songs -> TrackContext.InSongs
             else -> return null
         }

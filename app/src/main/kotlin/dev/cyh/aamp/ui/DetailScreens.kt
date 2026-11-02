@@ -1,6 +1,8 @@
 package dev.cyh.aamp.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -39,6 +41,7 @@ internal fun AlbumScreen(
     player: Player?,
     playingTrackId: Long?,
     onOpenArtist: (artistKey: Long) -> Unit,
+    onAddToPlaylist: (trackIds: LongArray) -> Unit,
 ) {
     val colors = LocalColors.current
     val albumId = snapshot.albumIds[album]
@@ -71,7 +74,14 @@ internal fun AlbumScreen(
                         style = colors.caption,
                     )
                     Spacer(Modifier.height(4.dp))
-                    PillButton(stringResource(R.string.ui_play), onClick = { player?.playId(MediaId.Album(albumId)) })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PillButton(stringResource(R.string.ui_play), onClick = { player?.playId(MediaId.Album(albumId)) })
+                        PillButton(
+                            stringResource(R.string.ui_add_to_playlist),
+                            onClick = { onAddToPlaylist(snapshot.trackIds.copyOfRange(first, first + count)) },
+                            filled = false,
+                        )
+                    }
                 }
             }
         }
@@ -85,6 +95,7 @@ internal fun AlbumScreen(
                 durationMs = snapshot.trackDurationMs[t],
                 playing = snapshot.trackIds[t] == playingTrackId,
                 onClick = { player?.playId(MediaId.Track(snapshot.trackIds[t], TrackContext.InAlbum(albumId))) },
+                onLongClick = { onAddToPlaylist(longArrayOf(snapshot.trackIds[t])) },
             )
         }
     }
@@ -102,6 +113,7 @@ internal fun ArtistScreen(
     player: Player?,
     playingTrackId: Long?,
     onOpenAlbum: (albumId: Long) -> Unit,
+    onAddToPlaylist: (trackIds: LongArray) -> Unit,
 ) {
     val artistKey = snapshot.artistKeys[artist]
     val albums = remember(snapshot, artist) { snapshot.artistAlbums(artist) }
@@ -137,6 +149,7 @@ internal fun ArtistScreen(
                 durationMs = snapshot.trackDurationMs[t],
                 playing = snapshot.trackIds[t] == playingTrackId,
                 onClick = { player?.playId(MediaId.Track(snapshot.trackIds[t], TrackContext.InArtist(artistKey))) },
+                onLongClick = { onAddToPlaylist(longArrayOf(snapshot.trackIds[t])) },
             )
         }
     }
@@ -164,16 +177,34 @@ internal fun GenreScreen(snapshot: LibrarySnapshot, genre: Int, covers: CoverLoa
     )
 }
 
-/** A song: optional track number, title, a second line, and length; the playing one is highlighted. */
+/**
+ * A song: optional track number, title, a second line, and length; the playing one is highlighted.
+ * A long press adds it to a playlist when [onLongClick] is given; [trailing] goes at the end.
+ */
+@OptIn(ExperimentalFoundationApi::class) // combinedClickable's label parameters
 @Composable
-internal fun TrackRow(number: String?, title: String, subtitle: String?, durationMs: Long, playing: Boolean, onClick: () -> Unit) {
+internal fun TrackRow(
+    number: String?,
+    title: String,
+    subtitle: String?,
+    durationMs: Long,
+    playing: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     val colors = LocalColors.current
     val titleStyle = if (playing) colors.body.copy(color = colors.accent, fontWeight = FontWeight.Medium) else colors.body
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .combinedClickable(
+                role = Role.Button,
+                onLongClickLabel = onLongClick?.let { stringResource(R.string.ui_add_to_playlist) },
+                onLongClick = onLongClick,
+                onClick = onClick,
+            )
+            .padding(start = 16.dp, end = if (trailing != null) 4.dp else 16.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (number != null) BasicText(number, style = colors.caption, modifier = Modifier.width(36.dp))
@@ -182,6 +213,7 @@ internal fun TrackRow(number: String?, title: String, subtitle: String?, duratio
             if (subtitle != null) BasicText(subtitle, style = colors.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (durationMs > 0) BasicText(formatDuration(durationMs), style = colors.caption, modifier = Modifier.padding(start = 12.dp))
+        trailing?.invoke()
     }
 }
 

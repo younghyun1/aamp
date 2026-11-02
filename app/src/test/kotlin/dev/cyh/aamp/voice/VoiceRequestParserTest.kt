@@ -49,6 +49,25 @@ class VoiceRequestParserTest {
     }
 
     @Test
+    fun `playlist and genre markers`() {
+        assertEquals(Search(RequestKind.PLAYLIST, "road trip", null, false), parse("play my Road Trip playlist"))
+        assertEquals(Search(RequestKind.PLAYLIST, "road trip", null, false), parse("play the playlist Road Trip"))
+        assertEquals(Search(RequestKind.PLAYLIST, "road trip", null, true), parse("shuffle playlist road trip"))
+        assertEquals(Search(RequestKind.GENRE, "jazz", null, true), parse("play the genre jazz"))
+        assertEquals(Search(RequestKind.GENRE, "thrash metal", null, true), parse("play thrash metal genre"))
+        // Unmarked genre requests are left to the resolver, which knows the library's genres.
+        assertEquals(Search(RequestKind.ANY, "jazz", null, false), parse("play some jazz"))
+    }
+
+    @Test
+    fun `genre and playlist focus`() {
+        val genre = VoiceQuery(query = "play rock", focus = VoiceRequestParser.FOCUS_GENRE, genre = "Rock")
+        assertEquals(Search(RequestKind.GENRE, "Rock", null, true), VoiceRequestParser.parse(genre))
+        val playlist = VoiceQuery(query = "play road trip", focus = VoiceRequestParser.FOCUS_PLAYLIST)
+        assertEquals(Search(RequestKind.PLAYLIST, "road trip", null, false), VoiceRequestParser.parse(playlist))
+    }
+
+    @Test
     fun `unmarked requests are left to the resolver`() {
         assertEquals(Search(RequestKind.ANY, "metallica", null, false), parse("play Metallica"))
         assertEquals(Search(RequestKind.ANY, "stand by me", null, false), parse("play Stand by Me"))

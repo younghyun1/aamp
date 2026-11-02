@@ -15,14 +15,16 @@ import dev.cyh.aamp.artwork.ArtworkProvider
 import dev.cyh.aamp.library.LetterIndex
 import dev.cyh.aamp.library.LibrarySnapshot
 import dev.cyh.aamp.library.LoadedLibrary
+import dev.cyh.aamp.library.Playlist
 import dev.cyh.aamp.voice.QueueSource
 import dev.cyh.aamp.voice.Resolution
 
 /**
  * Builds the media items Android Auto browses and plays.
  *
- * Root tabs: Albums (artwork grid), Artists, Recently added (artwork grid) and Songs (a "Shuffle
- * all" item, then every song by title). Albums, Artists and Songs are split into alphabetical
+ * Root tabs: Albums (Recently added, then the albums), Artists, Playlists and Songs (a "Shuffle
+ * all" item, then every song by title). Android Auto shows at most four tabs, so Recently added
+ * lives inside Albums. Albums, Artists and Songs are split into alphabetical
  * sections once they hold more than [SECTION_THRESHOLD] entries, because Android Auto neither
  * pages nor lets a driver scroll far. Albums and artists are both browsable and playable.
  *
@@ -36,6 +38,7 @@ internal class BrowseItems(private val context: Context) {
     private val artistsTitle = context.getString(R.string.browse_artists)
     private val recentTitle = context.getString(R.string.browse_recent)
     private val songsTitle = context.getString(R.string.browse_songs)
+    private val playlistsTitle = context.getString(R.string.browse_playlists)
     private val shuffleAllTitle = context.getString(R.string.browse_shuffle_all)
     val searchAlbumsGroup: String = context.getString(R.string.search_group_albums)
     val searchArtistsGroup: String = context.getString(R.string.search_group_artists)
@@ -44,12 +47,14 @@ internal class BrowseItems(private val context: Context) {
     fun root(): MediaItem = folder(MediaId.Root, appName, null, MediaMetadata.MEDIA_TYPE_FOLDER_MIXED, null)
 
     /** The item for [id], or null when it names nothing in the library. */
-    fun item(library: LoadedLibrary, id: MediaId): MediaItem? {
+    fun item(library: LoadedLibrary, playlists: List<Playlist>, id: MediaId): MediaItem? {
         val s = library.snapshot
         return when (id) {
             MediaId.Root -> root()
-            MediaId.Albums, MediaId.Artists, MediaId.Recent, MediaId.Songs ->
+            MediaId.Albums, MediaId.Artists, MediaId.Playlists, MediaId.Songs ->
                 rootChildren(s).firstOrNull { it.mediaId == MediaIds.encode(id) }
+            MediaId.Recent -> recent()
+            is MediaId.Playlist -> playlists.firstOrNull { it.id == id.playlistId }?.let { playlist(s, it) }
             MediaId.ShuffleAll -> shuffleAll()
             is MediaId.ShuffleArtist -> s.artistIndex(id.artistKey).takeIf { it >= 0 }?.let { shuffleArtist(s, it) }
             is MediaId.AlbumSection -> s.albumLetters.sectionOf(id.label).takeIf { it >= 0 }?.let { albumSection(s, it) }
@@ -63,13 +68,24 @@ internal class BrowseItems(private val context: Context) {
     }
 
     /** One page of the children of [parent], or null when [parent] is not browsable. */
-    fun children(library: LoadedLibrary, parent: MediaId, page: Int, pageSize: Int): List<MediaItem>? {
+    fun children(library: LoadedLibrary, playlists: List<Playlist>, parent: MediaId, page: Int, pageSize: Int): List<MediaItem>? {
         val s = library.snapshot
         return when (parent) {
             MediaId.Root -> rootChildren(s).let { tabs -> paged(tabs.size, page, pageSize) { tabs[it] } }
+            // Recently added first, then the sections or albums.
             MediaId.Albums ->
-                if (s.albumCount > SECTION_THRESHOLD) paged(s.albumLetters.size, page, pageSize) { albumSection(s, it) }
-                else paged(s.albumCount, page, pageSize) { album(s, it) }
+                if (s.albumCount > SECTION_THRESHOLD) {
+                    paged(s.albumLetters.size + 1, page, pageSize) { i -> if (i == 0) recent() else albumSection(s, i - 1) }
+                } else {
+                    paged(s.albumCount + 1, page, pageSize) { i -> if (i == 0) recent() else album(s, i - 1) }
+                }
+            MediaId.Playlists -> paged(playlists.size, page, pageSize) { playlist(s, playlists[it]) }
+            is MediaId.Playlist -> {
+                val playlist = playlists.firstOrNull { it.id == parent.playlistId } ?: return null
+                val tracks = playlist.tracksIn(s)
+                val context = TrackContext.InPlaylist(playlist.id)
+                paged(tracks.size, page, pageSize) { track(s, tracks[it], context) }
+            }
             MediaId.Artists ->
                 if (s.artistCount > SECTION_THRESHOLD) paged(s.artistLetters.size, page, pageSize) { artistSection(s, it) }
                 else paged(s.artistCount, page, pageSize) { artist(s, it) }
@@ -130,6 +146,7 @@ internal class BrowseItems(private val context: Context) {
             is QueueSource.Album -> TrackContext.InAlbum(s.albumIds[source.album])
             is QueueSource.Artist -> TrackContext.InArtist(s.artistKeys[source.artist])
             is QueueSource.Genre -> TrackContext.InGenre(s.genreKeys[source.genre])
+            is QueueSource.Playlist -> TrackContext.InPlaylist(source.id)
             QueueSource.Songs -> TrackContext.InSongs
             QueueSource.Library -> TrackContext.None
         }
@@ -199,6 +216,21 @@ internal class BrowseItems(private val context: Context) {
             .build()
     }
 
+    /** A playlist: browsing lists its songs, playing plays them in order. */
+    fun playlist(s: LibrarySnapshot, p: Playlist): MediaItem {
+        val tracks = p.tracksIn(s)
+        val metadata = MediaMetadata.Builder()
+            .setTitle(p.name)
+            .setSubtitle(count(R.plurals.browse_song_count, tracks.size))
+            // The first song's cover stands in for the playlist.
+            .setArtworkUri(tracks.firstOrNull()?.let { ArtworkProvider.albumUri(s.albumIds[s.trackAlbum[it]]) })
+            .setIsBrowsable(true)
+            .setIsPlayable(tracks.isNotEmpty())
+            .setMediaType(MediaMetadata.MEDIA_TYPE_PLAYLIST)
+            .build()
+        return MediaItem.Builder().setMediaId(MediaIds.encode(MediaId.Playlist(p.id))).setMediaMetadata(metadata).build()
+    }
+
     /** A genre: browsing lists its albums, playing shuffles its songs. Not in the root tabs. */
     fun genre(s: LibrarySnapshot, g: Int): MediaItem {
         val metadata = MediaMetadata.Builder()
@@ -265,10 +297,19 @@ internal class BrowseItems(private val context: Context) {
             folder(MediaId.Albums, albumsTitle, null, MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS,
                 extras(browsable = if (s.albumCount > SECTION_THRESHOLD) list else grid)),
             folder(MediaId.Artists, artistsTitle, null, MediaMetadata.MEDIA_TYPE_FOLDER_ARTISTS, extras(browsable = list)),
-            folder(MediaId.Recent, recentTitle, null, MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS, extras(browsable = grid)),
+            folder(MediaId.Playlists, playlistsTitle, null, MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS, extras(browsable = list)),
             folder(MediaId.Songs, songsTitle, null, MediaMetadata.MEDIA_TYPE_FOLDER_MIXED, extras(browsable = list, playable = list)),
         )
     }
+
+    /** The newest albums, as a grid. */
+    private fun recent(): MediaItem = folder(
+        MediaId.Recent,
+        recentTitle,
+        null,
+        MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS,
+        extras(browsable = MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM),
+    )
 
     private fun folder(id: MediaId, title: String, subtitle: String?, mediaType: Int, extras: Bundle?): MediaItem {
         val metadata = MediaMetadata.Builder()
@@ -306,13 +347,14 @@ internal class BrowseItems(private val context: Context) {
     }
 
     /** The name Android Auto's queue view shows for a queue whose first item is [first]. */
-    fun queueTitle(s: LibrarySnapshot?, first: MediaItem): String? {
+    fun queueTitle(s: LibrarySnapshot?, playlists: List<Playlist>, first: MediaItem): String? {
         val id = MediaIds.parse(first.mediaId) as? MediaId.Track ?: return null
         return when (val c = id.context) {
             is TrackContext.InAlbum ->
                 s?.albumIndex(c.albumId)?.takeIf { it >= 0 }?.let { s.albumTitles[it] } ?: first.mediaMetadata.albumTitle?.toString()
             is TrackContext.InArtist -> s?.artistIndex(c.artistKey)?.takeIf { it >= 0 }?.let { s.artistNames[it] }
             is TrackContext.InGenre -> s?.genreIndex(c.genreKey)?.takeIf { it >= 0 }?.let { s.genreNames[it] }
+            is TrackContext.InPlaylist -> playlists.firstOrNull { it.id == c.playlistId }?.name
             TrackContext.InSongs -> songsTitle
             TrackContext.None -> shuffleAllTitle
         }

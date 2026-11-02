@@ -1,7 +1,7 @@
 package dev.cyh.aamp.search
 
-/** Match keys and token postings for albums, artists and tracks, by snapshot index. */
-class SearchIndex(val albums: KindIndex, val artists: KindIndex, val tracks: KindIndex)
+/** Match keys and token postings for albums, artists, tracks and genres, by snapshot index. */
+class SearchIndex(val albums: KindIndex, val artists: KindIndex, val tracks: KindIndex, val genres: KindIndex)
 
 /** One scored entry: a snapshot index and its score. */
 data class Hit(val index: Int, val score: Float)

@@ -5,6 +5,7 @@ import dev.cyh.aamp.TestLibrary.album
 import dev.cyh.aamp.TestLibrary.artist
 import dev.cyh.aamp.TestLibrary.track
 import dev.cyh.aamp.library.LibraryBuilder
+import dev.cyh.aamp.library.Playlist
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -128,6 +129,54 @@ class QueueResolverTest {
         val ordered = resolver.genre(thrash, shuffle = false, startTrack = one)
         assertArrayEquals(snapshot.genreTracks(thrash), ordered.tracks)
         assertEquals(one, ordered.tracks[ordered.startIndex])
+    }
+
+    private val roadTrip = Playlist(
+        11,
+        "Road Trip",
+        longArrayOf(snapshot.trackIds[library.track("Waterloo")], snapshot.trackIds[library.track("One")], 999_999),
+    )
+    private val gone = Playlist(12, "Lost Songs", longArrayOf(888_888))
+    private val withPlaylists = QueueResolver(library, Random(42), listOf(roadTrip, gone))
+
+    private fun resolveWithPlaylists(kind: RequestKind, phrase: String, shuffle: Boolean = false): Resolution =
+        withPlaylists.resolve(PlayRequest.Search(kind, phrase, null, shuffle))
+
+    @Test
+    fun `a playlist plays in order, its missing songs skipped`() {
+        for (resolution in listOf(resolveWithPlaylists(RequestKind.PLAYLIST, "road trip"), resolveWithPlaylists(RequestKind.ANY, "road trip"))) {
+            val q = queue(resolution)
+            assertEquals(QueueSource.Playlist(11), q.source)
+            assertArrayEquals(intArrayOf(library.track("Waterloo"), library.track("One")), q.tracks)
+            assertEquals(0, q.startIndex)
+        }
+        // "My" before the name, as when Gemini drops the word playlist.
+        assertEquals(QueueSource.Playlist(11), queue(resolveWithPlaylists(RequestKind.ANY, "my road trip")).source)
+        assertEquals(QueueSource.Playlist(11), queue(resolveWithPlaylists(RequestKind.PLAYLIST, "roadtrip")).source)
+    }
+
+    @Test
+    fun `a playlist with no songs left is no match`() {
+        assertEquals(Resolution.NoMatch("lost songs"), resolveWithPlaylists(RequestKind.PLAYLIST, "lost songs"))
+    }
+
+    @Test
+    fun `genres by name, with or without music`() {
+        val rock = snapshot.genreNames.indexOf("Rock")
+        for (phrase in listOf("rock", "rock music", "rock songs")) {
+            assertEquals(QueueSource.Genre(rock), queue(resolve(RequestKind.ANY, phrase)).source)
+        }
+        val thrash = snapshot.genreNames.indexOf("Thrash Metal")
+        assertEquals(QueueSource.Genre(thrash), queue(resolve(RequestKind.GENRE, "thrash metal")).source)
+        assertEquals(QueueSource.Genre(thrash), queue(resolve(RequestKind.ANY, "thrash metal")).source)
+    }
+
+    @Test
+    fun `kind words after an artist name still play the artist`() {
+        val metallica = library.artist("Metallica")
+        for (phrase in listOf("metallica songs", "metallica music")) {
+            assertEquals(QueueSource.Artist(metallica), queue(resolve(RequestKind.ANY, phrase)).source)
+        }
     }
 
     @Test

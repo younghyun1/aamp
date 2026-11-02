@@ -1,7 +1,9 @@
 package dev.cyh.aamp.voice
 
 import dev.cyh.aamp.library.LoadedLibrary
+import dev.cyh.aamp.library.Playlist
 import dev.cyh.aamp.search.Hit
+import dev.cyh.aamp.search.KindIndex
 import dev.cyh.aamp.search.MatchKey
 import dev.cyh.aamp.search.Similarity
 import dev.cyh.aamp.search.TextNormalizer
@@ -13,6 +15,7 @@ sealed interface QueueSource {
     data class Album(val album: Int) : QueueSource
     data class Artist(val artist: Int) : QueueSource
     data class Genre(val genre: Int) : QueueSource
+    data class Playlist(val id: Long) : QueueSource
     /** The Songs list, ordered by title. */
     data object Songs : QueueSource
     /** The whole library, shuffled. */
@@ -35,13 +38,21 @@ sealed interface Resolution {
  * - Album: the album from its first track.
  * - Song: the song, then the rest of its album.
  * - Artist: every track by the artist, shuffled.
- * - Any: whichever of artist, album and song matches best. An artist wins ties, and an album wins
- *   ties and near ties with a song: Gemini drops the word "album" from "play album X", so a
- *   request that names both an album and its title track is taken as the album.
+ * - Genre: every track in the genre, shuffled.
+ * - Playlist: the playlist in order, or shuffled when asked.
+ * - Any: whichever matches best. A playlist named closely (Gemini drops "playlist" like it drops
+ *   "album") wins over everything; an artist wins ties with a genre, album or song; a genre wins
+ *   ties with an album or song; and an album wins ties and near ties with a song, so a request
+ *   that names both an album and its title track is taken as the album.
  */
-class QueueResolver(private val library: LoadedLibrary, private val random: Random) {
+class QueueResolver(
+    private val library: LoadedLibrary,
+    private val random: Random,
+    private val playlists: List<Playlist> = emptyList(),
+) {
     private val snapshot = library.snapshot
     private val search = library.search
+    private val playlistIndex by lazy { KindIndex.build(Array(playlists.size) { MatchKey.of(playlists[it].name) }) }
 
     fun resolve(request: PlayRequest): Resolution {
         if (snapshot.trackCount == 0) return Resolution.EmptyLibrary
@@ -83,6 +94,19 @@ class QueueResolver(private val library: LoadedLibrary, private val random: Rand
         return Resolution.Queue(tracks, start, QueueSource.Genre(genre), "genre ${snapshot.genreNames[genre]}, $order")
     }
 
+    /**
+     * Playlist [playlist] in order from [startTrack] (its first occurrence), or shuffled; null when
+     * none of its songs is in the library.
+     */
+    fun playlist(playlist: Playlist, shuffle: Boolean, startTrack: Int = -1): Resolution.Queue? {
+        val tracks = playlist.tracksIn(snapshot)
+        if (tracks.isEmpty()) return null
+        if (shuffle) tracks.shuffleWith(random)
+        val start = tracks.indexOf(startTrack).coerceAtLeast(0)
+        val order = if (shuffle) "shuffled" else "in order"
+        return Resolution.Queue(tracks, start, QueueSource.Playlist(playlist.id), "playlist ${playlist.name}, $order")
+    }
+
     /** The Songs list from [startTrack]. */
     fun songs(startTrack: Int): Resolution.Queue {
         val tracks = snapshot.tracksByTitle
@@ -102,7 +126,14 @@ class QueueResolver(private val library: LoadedLibrary, private val random: Rand
                     ?: bestAlbum(readings)?.let { album(it.index).scored(it) }
                     ?: Resolution.NoMatch(request.phrase)
             RequestKind.ARTIST ->
-                search.artists.best(MatchKey.of(request.phrase), MIN_SCORE)?.let { artist(it.index, shuffle = true).scored(it) }
+                bestName(nameKeys(request.phrase), search.artists)?.let { artist(it.index, shuffle = true).scored(it) }
+                    ?: resolveAny(request, readings)
+            RequestKind.GENRE ->
+                bestName(nameKeys(request.phrase), search.genres)?.let { genre(it.index, shuffle = true).scored(it) }
+                    ?: resolveAny(request, readings)
+            RequestKind.PLAYLIST ->
+                bestName(nameKeys(request.phrase), playlistIndex)
+                    ?.let { hit -> playlist(playlists[hit.index], request.shuffle)?.scored(hit) }
                     ?: resolveAny(request, readings)
             RequestKind.ANY -> resolveAny(request, readings)
         }
@@ -111,16 +142,48 @@ class QueueResolver(private val library: LoadedLibrary, private val random: Rand
     private fun resolveAny(request: PlayRequest.Search, readings: List<Reading>): Resolution {
         val album = bestAlbum(readings)
         val track = bestTrack(readings)
-        val artist = if (request.artist == null) search.artists.best(MatchKey.of(request.phrase), MIN_SCORE) else null
+        val names = if (request.artist == null) nameKeys(request.phrase) else emptyList()
+        val artist = bestName(names, search.artists)
+        val genre = bestName(names, search.genres)
+        val playlist = bestName(names, playlistIndex)
         val a = album?.score ?: 0f
         val t = track?.score ?: 0f
         val r = artist?.score ?: 0f
+        val g = genre?.score ?: 0f
+        val p = playlist?.score ?: 0f
+        if (playlist != null && p >= PLAYLIST_MIN && p >= maxOf(r, a, t, g)) {
+            playlist(playlists[playlist.index], request.shuffle)?.let { return it.scored(playlist) }
+        }
         return when {
-            artist != null && r >= a && r >= t -> artist(artist.index, shuffle = true).scored(artist)
+            artist != null && r >= a && r >= t && r >= g -> artist(artist.index, shuffle = true).scored(artist)
+            genre != null && g >= a && g >= t -> genre(genre.index, shuffle = true).scored(genre)
             album != null && a >= t - MARGIN -> album(album.index).scored(album)
             track != null -> song(track.index, request.shuffle).scored(track)
             else -> Resolution.NoMatch(request.phrase)
         }
+    }
+
+    /**
+     * The phrase read as the name of an artist, genre or playlist: as said, and without words that
+     * only say what kind of thing it names ("metallica songs", "rock music", "my road trip"). The
+     * shortened form weighs [UNMARKED_WEIGHT], so an album titled "Love Songs" beats an artist
+     * named Love.
+     */
+    private fun nameKeys(phrase: String): List<Pair<MatchKey, Float>> {
+        val words = TextNormalizer.words(phrase).split(' ').filter { it.isNotEmpty() }
+        var from = 0
+        var to = words.size
+        if (to - from > 1 && words[to - 1] in NAME_SUFFIXES) to--
+        if (to - from > 1 && words[from] == "my") from++
+        val keys = arrayListOf(MatchKey.of(phrase) to 1f)
+        if (from > 0 || to < words.size) keys += MatchKey.of(words.subList(from, to).joinToString(" ")) to UNMARKED_WEIGHT
+        return keys
+    }
+
+    private fun bestName(names: List<Pair<MatchKey, Float>>, index: KindIndex): Hit? {
+        val best = Best(MIN_SCORE)
+        for ((key, weight) in names) index.best(key, MIN_SCORE)?.let { best.offer(it.index, it.score * weight) }
+        return best.hit()
     }
 
     /** The song, then the rest of its album; shuffled album when asked. */
@@ -348,6 +411,12 @@ class QueueResolver(private val library: LoadedLibrary, private val random: Rand
 
         /** Weight of readings the request does not state outright, so a whole-phrase title wins ties. */
         const val UNMARKED_WEIGHT = 0.97f
+
+        /** How closely an unmarked request must name a playlist for the playlist to play. */
+        const val PLAYLIST_MIN = 0.9f
+
+        /** Trailing words that say what kind of thing a name is: "metallica songs", "rock music". */
+        private val NAME_SUFFIXES = setOf("music", "songs", "tracks", "stuff")
 
         /** Longest artist name, in words, tried without a separator. */
         private const val MAX_ARTIST_WORDS = 5
