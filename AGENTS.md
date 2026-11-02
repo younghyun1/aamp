@@ -25,7 +25,7 @@ aamp is a local-music player for Android Auto. Its voice search turns Gemini req
 app/src/main/kotlin/dev/cyh/aamp/
   AampApplication.kt   process-wide Library and VoiceLog
   playback/   PlaybackService, LibraryCallback, AudioPlayer, QueueStore
-  library/    MediaStore scan, LibrarySnapshot, LibraryBuilder, LetterIndex, Library state, Playlists
+  library/    MediaStore scan, LibrarySnapshot, LibraryBuilder, LetterIndex, Library state, SnapshotStore, Playlists
   artwork/    ArtworkProvider, ArtworkCache (album covers for Android Auto)
   search/     TextNormalizer, MatchKey, Similarity, SearchIndex
   voice/      VoiceRequestParser, QueueResolver, VoiceLog, PlayFromSearchActivity
@@ -36,7 +36,6 @@ app/src/test/kotlin/dev/cyh/aamp/   JVM unit tests; TestLibrary is the shared fi
 docs/plans/                         design notes, YYYY-MM-DD-name.md
 ```
 
-Snapshot persistence in `library/` is still to come.
 
 ## Toolchain
 

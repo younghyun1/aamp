@@ -61,7 +61,8 @@ internal fun SettingsScreen(
                         pluralStringResource(R.plurals.browse_album_count, albums, albums),
                         pluralStringResource(R.plurals.browse_artist_count, artists, artists),
                     ).joinToString(" · ")
-                    counts to stringResource(R.string.settings_scanned, clock.format(Instant.ofEpochMilli(finishedAtMillis)), durationMs)
+                    val time = clock.format(Instant.ofEpochMilli(finishedAtMillis))
+                    counts to stringResource(if (loaded) R.string.settings_loaded else R.string.settings_scanned, time, durationMs)
                 }
                 else -> libraryText(libraryState) to null
             }

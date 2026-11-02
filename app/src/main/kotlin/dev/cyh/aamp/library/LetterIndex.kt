@@ -9,11 +9,11 @@ package dev.cyh.aamp.library
  * Android Auto neither pages long lists nor shows more than a limited number of items per level
  * while driving, so large libraries are browsed one section at a time.
  */
-class LetterIndex private constructor(val labels: Array<String>, private val members: Array<IntArray>) {
+class LetterIndex internal constructor(val labels: Array<String>, internal val sections: Array<IntArray>) {
     val size: Int get() = labels.size
 
     /** Entry indices in section [section], in display order. */
-    fun members(section: Int): IntArray = members[section]
+    fun members(section: Int): IntArray = sections[section]
 
     /** The section labelled [label], or -1. */
     fun sectionOf(label: String): Int = labels.indexOf(label)

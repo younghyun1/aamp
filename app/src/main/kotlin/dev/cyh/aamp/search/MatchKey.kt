@@ -18,6 +18,10 @@ class MatchKey private constructor(
 
         fun of(raw: String): MatchKey = ofNormalized(TextNormalizer.normalize(raw))
 
+        /** A key saved earlier: its normalized text and trigrams, so neither is computed again. */
+        internal fun restore(normalized: String, trigrams: LongArray): MatchKey =
+            if (normalized.isEmpty()) EMPTY else MatchKey(normalized, TextNormalizer.tokens(normalized), trigrams)
+
         fun ofNormalized(normalized: String): MatchKey =
             if (normalized.isEmpty()) EMPTY
             else MatchKey(normalized, TextNormalizer.tokens(normalized), trigramsOf(normalized))
