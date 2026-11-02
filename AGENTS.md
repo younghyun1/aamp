@@ -33,6 +33,7 @@ app/src/main/kotlin/dev/cyh/aamp/
   widget/     NowPlayingWidget, the home screen widget the playback service updates
   ui/         Compose phone screen: library tabs, album, artist, genre and playlist pages, now-playing bar, settings
 app/src/test/kotlin/dev/cyh/aamp/   JVM unit tests; TestLibrary is the shared fixture
+baselineprofile/                    generator for the app's baseline and startup profiles
 docs/plans/                         design notes, YYYY-MM-DD-name.md
 ```
 
@@ -49,6 +50,7 @@ docs/plans/                         design notes, YYYY-MM-DD-name.md
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest
 ./gradlew :app:lintDebug
+ANDROID_SERIAL=emulator-5554 ./gradlew :app:generateBaselineProfile
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb logcat -s Aamp:V AampVoice:V AampLibrary:V
 adb shell dumpsys media_session

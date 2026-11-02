@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "aamp"
-include(":app")
+include(":app", ":baselineprofile")
